@@ -15,6 +15,14 @@
 #include "interrupt.h"
 #include "stats.h"
 #include "timer.h"
+#include "bitmap.h"
+#include "synch.h"
+
+struct KernelLock {
+    Lock* lock;
+    AddrSpace *owner;
+    bool isToBeDeleted;
+};
 
 // Initialization and cleanup routines
 extern void Initialize(int argc, char **argv); 	// Initialization,
@@ -28,6 +36,8 @@ extern Scheduler *scheduler;			// the ready list
 extern Interrupt *interrupt;			// interrupt status
 extern Statistics *stats;			// performance metrics
 extern Timer *timer;				// the hardware alarm clock
+extern KernelLock *lockTable;
+extern BitMap lockMap;
 
 #ifdef USER_PROGRAM
 #include "machine.h"

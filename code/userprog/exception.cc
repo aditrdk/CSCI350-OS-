@@ -231,6 +231,43 @@ void Close_Syscall(int fd) {
     }
 }
 
+void Yield_Syscall() {
+  currentThread->Yield();
+}
+
+void Exit_Syscall(int status) {
+  currentThread->Finish();
+}
+
+int CreateLock_Syscall(unsigned int vaddr, int len) {
+    // Create the file with the name in the user buffer pointed to by
+    // vaddr.  The file name is at most MAXFILENAME chars long.  No
+    // way to return errors, though...
+    char *buf = new char[len+1];  // Kernel buffer to put the name in
+
+    if (!buf) return -1;
+
+    if( copyin(vaddr,len,buf) == -1 ) {
+  printf("%s","Bad pointer passed to CreateLock\n");
+  delete buf;
+  return -1;
+    }
+
+    buf[len]='\0';
+    int index = lockMap.Find();
+    if(index != -1) {
+      lockTable[index].lock = new Lock(buf);
+      lockTable[index].owner = currentThread->space;
+      lockTable[index].isToBeDeleted = false;
+    }
+    else {
+      printf("No empty locks in lockTable\n");
+    }
+
+    delete buf;
+    return index;
+}
+
 void ExceptionHandler(ExceptionType which) {
     int type = machine->ReadRegister(2); // Which syscall?
     int rv=0; 	// the return value from a syscall
@@ -267,6 +304,18 @@ void ExceptionHandler(ExceptionType which) {
 		DEBUG('a', "Close syscall.\n");
 		Close_Syscall(machine->ReadRegister(4));
 		break;
+      case SC_Yield:
+    DEBUG('a', "Yield syscall.\n");
+    Yield_Syscall();
+    break;
+      case SC_Exit:
+    DEBUG('a', "Exit syscall.\n");
+    Exit_Syscall(machine->ReadRegister(4));
+    break;
+      case SC_CreateLock:
+    DEBUG('a', "Create Lock syscall.\n");
+    rv = CreateLock_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+    break;
 	}
 
 	// Put in the return value and increment the PC

@@ -8,6 +8,7 @@
 #include "copyright.h"
 #include "system.h"
 
+
 // This defines *all* of the global data structures used by Nachos.
 // These are all initialized and de-allocated by this file.
 
@@ -18,6 +19,8 @@ Interrupt *interrupt;			// interrupt status
 Statistics *stats;			// performance metrics
 Timer *timer;				// the hardware timer device,
 					// for invoking context switches
+KernelLock *lockTable;
+BitMap lockMap(420);
 
 #ifdef FILESYS_NEEDED
 FileSystem  *fileSystem;
@@ -137,6 +140,10 @@ Initialize(int argc, char **argv)
 	timer = new Timer(TimerInterruptHandler, 0, randomYield);
 
     threadToBeDestroyed = NULL;
+
+
+    lockTable = new KernelLock[420]();
+
 
     // We didn't explicitly allocate the current thread we are running in.
     // But if it ever tries to give up the CPU, we better have a Thread
