@@ -21,9 +21,32 @@ int main() {
 		Write("Not index 0\n", sizeof("ock index 0\n"), ConsoleOutput );
 	}
 
+	Write("Destroying lock \n", sizeof("Destroying lock \n"), ConsoleOutput );
+
 	DestroyLock(lockNum2);
 	DestroyLock(-1);
 	DestroyLock(55);
 	DestroyLock(9000);
+
+	Acquire(lockNum);
+	Acquire(lockNum2);
+	Acquire(33);
+	Acquire(-22);
+
+
+	Release(lockNum);
+	Release(lockNum2);
+	Release(-2);
+
+	Acquire(lockNum);
+	DestroyLock(lockNum);
+	Acquire(lockNum);
+	Release(lockNum);
+	
+	Acquire(lockNum);
+	Release(lockNum);
+
+
+
 	Halt();
 }

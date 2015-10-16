@@ -260,6 +260,7 @@ int CreateLock_Syscall(unsigned int vaddr, int len) {
       lockTable[index].lock = new Lock(buf);
       lockTable[index].owner = currentThread->space;
       lockTable[index].isToBeDeleted = false;
+      lockTable[index].waitingThreads = 0;
     }
     else {
       printf("No empty locks in lockTable\n");
@@ -278,24 +279,108 @@ void DestroyLock_Syscall(int index){
 	}
 
 	lockTableLock->Acquire();
+	//Check that the lock is assigned in the bitmap
+	if(!lockMap.Test(index)){
+		printf("Trying to destroy a lock that is not assigned to any process. %d\n", index);
+		return;
+	}
 	//Check lock is of this process
 	if(lockTable[index].owner != currentThread->space){
-		printf("Current thread is not owner of lock %d\n", index);
+		printf("Trying to destroy lock. Current process is not owner of lock %d\n", index);
 		return;
 	}
 
 	// if lock has owner, mark it to be deleted
 	// lock is not being held, remove it
-	if(lockTable[index].lock->isHeld()){
+	if(lockTable[index].lock->isHeld() || lockTable[index].waitingThreads > 0){
 		lockTable[index].isToBeDeleted = true;
 	}else{ 
 		delete lockTable[index].lock;
 		lockTable[index].lock = NULL;
+		lockTable[index].owner = NULL;
+		lockTable[index].isToBeDeleted = false;
+		lockMap.Clear(index);
 	}
 
 	lockTableLock->Release();
 
 }
+
+int Acquire_Syscall(int index){
+
+	lockTableLock->Acquire();
+	if(index < 0 || index >= numLocks){
+		printf("Trying to acquire invalid lock index %d\n", index);
+		return -1;
+	}
+
+	if(!lockMap.Test(index)){
+		printf("Trying to acquire a lock that is not currently assigned to a process. %d\n", index);
+		return -1;
+	}
+
+	//Check lock is of this process
+	if(lockTable[index].owner != currentThread->space){
+		printf("Cannot acquire lock. Current process is not owner of lock %d\n", index);
+		return -1;
+	}
+
+	if(lockTable[index].isToBeDeleted){
+		printf("Cannot acquire lock. Lock is marked to be deleted %d\n", index);
+		return -1;
+	}
+	lockTable[index].waitingThreads ++;
+	lockTableLock->Release();
+	//Might get context switched here
+	lockTable[index].lock->Acquire();
+
+	lockTableLock->Acquire();
+	lockTable[index].waitingThreads --;
+	lockTableLock->Release();
+
+	return index;
+
+
+
+}
+
+void Release_Syscall(int index){
+	lockTableLock->Acquire();
+
+	if(index < 0 || index >= numLocks){
+		printf("Trying to release invalid lock index %d\n", index);
+		return;
+	}
+
+	if(!lockMap.Test(index)){
+		printf("Trying to release a lock that is not currently assigned to a process. %d\n", index);
+		return;
+	}
+
+	//Check lock is of this process
+	if(lockTable[index].owner != currentThread->space){
+		printf("Cannot release lock. Current process is not owner of lock %d\n", index);
+		return;
+	}
+
+	if(!lockTable[index].lock->isHeldByCurrentThread()){
+		printf("Cannot release lock. Current thread is not holding the lock %d\n", index);
+		return;
+	}
+	lockTable[index].lock->Release();
+	if(lockTable[index].isToBeDeleted && lockTable[index].waitingThreads == 0){
+		//Delete lock
+		delete lockTable[index].lock;
+		lockTable[index].lock = NULL;
+		lockTable[index].owner = NULL;
+		lockTable[index].isToBeDeleted = false;
+		lockMap.Clear(index);
+	}
+
+	lockTableLock->Release();
+
+}
+
 
 void ExceptionHandler(ExceptionType which) {
     int type = machine->ReadRegister(2); // Which syscall?
@@ -348,6 +433,14 @@ void ExceptionHandler(ExceptionType which) {
       case SC_DestroyLock:
     DEBUG('a', "Destroy Lock syscall.\n");
     DestroyLock_Syscall(machine->ReadRegister(4));
+    break;
+          case SC_Acquire:
+    DEBUG('a', "Acquire Lock syscall.\n");
+    rv = Acquire_Syscall(machine->ReadRegister(4));
+    break;
+          case SC_Release:
+    DEBUG('a', "Release Lock syscall.\n");
+    Release_Syscall(machine->ReadRegister(4));
     break;
 	}
 

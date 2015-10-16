@@ -22,6 +22,7 @@ struct KernelLock {
     Lock* lock;
     AddrSpace *owner;
     bool isToBeDeleted;
+    int waitingThreads;
 };
 
 // Initialization and cleanup routines
