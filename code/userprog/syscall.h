@@ -132,6 +132,8 @@ void Yield();
 
 int CreateLock(char *name, int size);
 
+void DestroyLock(int index);
+
 #endif /* IN_ASM */
 
 #endif /* SYSCALL_H */

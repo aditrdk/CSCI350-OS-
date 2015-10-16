@@ -36,8 +36,12 @@ extern Scheduler *scheduler;			// the ready list
 extern Interrupt *interrupt;			// interrupt status
 extern Statistics *stats;			// performance metrics
 extern Timer *timer;				// the hardware alarm clock
+
+
 extern KernelLock *lockTable;
 extern BitMap lockMap;
+extern int numLocks;
+extern Lock* lockTableLock;
 
 #ifdef USER_PROGRAM
 #include "machine.h"

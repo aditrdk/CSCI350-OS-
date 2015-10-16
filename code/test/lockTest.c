@@ -20,5 +20,10 @@ int main() {
 	else {
 		Write("Not index 0\n", sizeof("ock index 0\n"), ConsoleOutput );
 	}
+
+	DestroyLock(lockNum2);
+	DestroyLock(-1);
+	DestroyLock(55);
+	DestroyLock(9000);
 	Halt();
 }

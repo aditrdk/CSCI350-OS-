@@ -254,6 +254,7 @@ int CreateLock_Syscall(unsigned int vaddr, int len) {
     }
 
     buf[len]='\0';
+    lockTableLock->Acquire();
     int index = lockMap.Find();
     if(index != -1) {
       lockTable[index].lock = new Lock(buf);
@@ -263,9 +264,37 @@ int CreateLock_Syscall(unsigned int vaddr, int len) {
     else {
       printf("No empty locks in lockTable\n");
     }
-
+    lockTableLock->Release();
     delete buf;
     return index;
+}
+
+
+void DestroyLock_Syscall(int index){
+	//Check lock index is a valid number
+	if(index < 0 || index >= numLocks){
+		printf("Trying to destroy invalid lock index %d", index);
+		return;
+	}
+
+	lockTableLock->Acquire();
+	//Check lock is of this process
+	if(lockTable[index].owner != currentThread->space){
+		printf("Current thread is not owner of lock %d", index);
+		return;
+	}
+
+	// if lock has owner, mark it to be deleted
+	// lock is not being held, remove it
+	if(lockTable[index].lock->isHeld()){
+		lockTable[index].isToBeDeleted = true;
+	}else{ 
+		delete lockTable[index].lock;
+		lockTable[index].lock = NULL;
+	}
+
+	lockTableLock->Release();
+
 }
 
 void ExceptionHandler(ExceptionType which) {
@@ -315,6 +344,10 @@ void ExceptionHandler(ExceptionType which) {
       case SC_CreateLock:
     DEBUG('a', "Create Lock syscall.\n");
     rv = CreateLock_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+    break;
+      case SC_DestroyLock:
+    DEBUG('a', "Destroy Lock syscall.\n");
+    DestroyLock_Syscall(machine->ReadRegister(4));
     break;
 	}
 

@@ -145,6 +145,10 @@ bool Lock::isHeldByCurrentThread() {
    return (currentThread==owner);
 }
 
+bool Lock::isHeld(){
+    return (owner != NULL);
+}
+
 Condition::Condition(char* debugName) { 
     name = debugName;
     queue = new List;

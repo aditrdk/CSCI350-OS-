@@ -20,7 +20,9 @@ Statistics *stats;			// performance metrics
 Timer *timer;				// the hardware timer device,
 					// for invoking context switches
 KernelLock *lockTable;
-BitMap lockMap(420);
+Lock* lockTableLock;
+int numLocks = 420;
+BitMap lockMap(numLocks);
 
 #ifdef FILESYS_NEEDED
 FileSystem  *fileSystem;
@@ -142,7 +144,8 @@ Initialize(int argc, char **argv)
     threadToBeDestroyed = NULL;
 
 
-    lockTable = new KernelLock[420]();
+    lockTable = new KernelLock[numLocks]();
+    lockTableLock = new Lock("Lock Table Lock");
 
 
     // We didn't explicitly allocate the current thread we are running in.
@@ -198,6 +201,9 @@ Cleanup()
     delete timer;
     delete scheduler;
     delete interrupt;
+
+    delete lockTable;
+    delete lockTableLock;
     
     Exit(0);
 }
