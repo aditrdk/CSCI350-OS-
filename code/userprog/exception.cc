@@ -273,14 +273,14 @@ int CreateLock_Syscall(unsigned int vaddr, int len) {
 void DestroyLock_Syscall(int index){
 	//Check lock index is a valid number
 	if(index < 0 || index >= numLocks){
-		printf("Trying to destroy invalid lock index %d", index);
+		printf("Trying to destroy invalid lock index %d\n", index);
 		return;
 	}
 
 	lockTableLock->Acquire();
 	//Check lock is of this process
 	if(lockTable[index].owner != currentThread->space){
-		printf("Current thread is not owner of lock %d", index);
+		printf("Current thread is not owner of lock %d\n", index);
 		return;
 	}
 
