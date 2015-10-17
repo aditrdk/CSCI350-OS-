@@ -117,14 +117,15 @@ SwapHeader (NoffHeader *noffH)
 //      constructed set to false.
 //----------------------------------------------------------------------
 
-AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
+AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(numStacks) {
     NoffHeader noffH;
     unsigned int i, size;
-
+    stackMapLock = new Lock("Stack map lock");
+    stackMap.Find();
     // Don't allocate the input or output to disk files
     fileTable.Put(0);
     fileTable.Put(0);
-
+ 
     executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
     if ((noffH.noffMagic != NOFFMAGIC) && 
 		(WordToHost(noffH.noffMagic) == NOFFMAGIC))
@@ -132,21 +133,24 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles) {
     ASSERT(noffH.noffMagic == NOFFMAGIC);
 
     size = noffH.code.size + noffH.initData.size + noffH.uninitData.size ;
-    numPages = divRoundUp(size, PageSize) + divRoundUp(UserStackSize,PageSize);
+    numPages = divRoundUp(size, PageSize) + divRoundUp(UserStackSize, PageSize);
+
+    numCodePages = divRoundUp(size, PageSize) ;
+    numStackPages = divRoundUp(UserStackSize*numStacks,PageSize);
                                                 // we need to increase the size
 						// to leave room for the stack
-    size = numPages * PageSize;
+    size = (numCodePages + numStackPages) * PageSize;
 
     ASSERT(numPages <= NumPhysPages);		// check we're not trying
 						// to run anything too big --
 						// at least until we have
 						// virtual memory
 
-    DEBUG('a', "Initializing address space, num pages %d, size %d\n", 
-					numPages, size);
+    DEBUG('a', "Initializing address space, num total pages %d, size %d\n", 
+					numCodePages + numStackPages, size);
 // first, set up the translation 
-    pageTable = new TranslationEntry[numPages];
-    for (i = 0; i < numPages; i++) {
+    pageTable = new TranslationEntry[numCodePages + numStackPages];
+    for (i = 0; i < numCodePages + numStackPages; i++) {
 	pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
 	pageTable[i].physicalPage = i;
 	pageTable[i].valid = TRUE;
@@ -243,5 +247,5 @@ void AddrSpace::SaveState()
 void AddrSpace::RestoreState() 
 {
     machine->pageTable = pageTable;
-    machine->pageTableSize = numPages;
+    machine->pageTableSize = numStackPages + numCodePages;
 }

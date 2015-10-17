@@ -24,6 +24,11 @@ Lock* lockTableLock;
 int numLocks = 420;
 BitMap lockMap(numLocks);
 
+KernelCondition *conditionTable;
+Lock* conditionTableLock;
+int numConditions = 420;
+BitMap conditionMap(numConditions);
+
 #ifdef FILESYS_NEEDED
 FileSystem  *fileSystem;
 #endif
@@ -144,8 +149,12 @@ Initialize(int argc, char **argv)
     threadToBeDestroyed = NULL;
 
 
+    //Locks and COnditions
     lockTable = new KernelLock[numLocks]();
     lockTableLock = new Lock("Lock Table Lock");
+
+    conditionTable = new KernelCondition[numConditions]();
+    conditionTableLock = new Lock("Condition Table Lock");
 
 
     // We didn't explicitly allocate the current thread we are running in.
@@ -202,8 +211,13 @@ Cleanup()
     delete scheduler;
     delete interrupt;
 
-    delete lockTable;
+    delete [] lockTable;
     delete lockTableLock;
+
+    delete []  conditionTable;
+    delete conditionTableLock;
+
+
     
     Exit(0);
 }

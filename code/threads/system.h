@@ -25,6 +25,13 @@ struct KernelLock {
     int waitingThreads;
 };
 
+struct KernelCondition{
+    Condition* condition;
+    AddrSpace *owner;
+    bool isToBeDeleted;
+    int waitingThreads;
+};
+
 // Initialization and cleanup routines
 extern void Initialize(int argc, char **argv); 	// Initialization,
 						// called before anything else
@@ -43,6 +50,11 @@ extern KernelLock *lockTable;
 extern BitMap lockMap;
 extern int numLocks;
 extern Lock* lockTableLock;
+
+extern KernelCondition *conditionTable;
+extern BitMap conditionMap;
+extern int numConditions;
+extern Lock* conditionTableLock;
 
 #ifdef USER_PROGRAM
 #include "machine.h"

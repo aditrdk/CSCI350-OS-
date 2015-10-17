@@ -339,9 +339,6 @@ int Acquire_Syscall(int index){
 	lockTableLock->Release();
 
 	return index;
-
-
-
 }
 
 void Release_Syscall(int index){
@@ -381,6 +378,71 @@ void Release_Syscall(int index){
 
 }
 
+int CreateCondition_Syscall(unsigned int vaddr, int len){
+	return -1;
+}
+
+void DestroyCondition_Syscall(int index){
+}
+
+void Wait_Syscall(int index){
+}
+
+void Signal_Syscall(int index){
+}
+
+void Broadcast_Syscall(int index){
+}
+
+void PrintfInt_Syscall(unsigned int vaddr, int len, int id){
+ char *buf;		// Kernel buffer for output
+
+    
+    if ( !(buf = new char[len]) ) {
+		printf("%s","Error allocating kernel buffer for write!\n");
+		return;
+    } else {
+        if ( copyin(vaddr,len,buf) == -1 ) {
+	  		printf("%s","Bad pointer passed to to write: data not written\n");
+	    	delete[] buf;
+	    	return;
+		}
+    }
+    printf(buf, id);
+
+    delete[] buf;
+}
+
+void kernelThread(int vAddr){
+	currentThread->space->SaveState();
+	//set registers
+	machine->WriteRegister(PCReg, vAddr);
+	machine->WriteRegister(NextPCReg, vAddr + 4);
+	currentThread->space->stackMapLock->Acquire();
+	int stackID = currentThread->space->stackMap.Find();
+		currentThread->space->stackMapLock->Release();
+
+	if(stackID == -1){
+		printf("Cannot Fork. Not enough available threads in current process.");
+		Exit_Syscall(-1);
+	}
+	printf("Stack id %d\n", stackID);
+	machine->WriteRegister(StackReg, (PageSize * currentThread->space->numCodePages) + (stackID)*UserStackSize - 16);
+	machine->Run();
+
+}
+
+void Fork_Syscall(int vAddr){
+	Thread* t = new Thread("Kernel Thread");
+	t->space = currentThread->space;
+	t->Fork(kernelThread, vAddr);
+
+}
+
+
+SpaceId Exec(char *name){
+	return -1;
+}
 
 void ExceptionHandler(ExceptionType which) {
     int type = machine->ReadRegister(2); // Which syscall?
@@ -434,14 +496,44 @@ void ExceptionHandler(ExceptionType which) {
     DEBUG('a', "Destroy Lock syscall.\n");
     DestroyLock_Syscall(machine->ReadRegister(4));
     break;
-          case SC_Acquire:
+      case SC_Acquire:
     DEBUG('a', "Acquire Lock syscall.\n");
     rv = Acquire_Syscall(machine->ReadRegister(4));
     break;
-          case SC_Release:
+      case SC_Release:
     DEBUG('a', "Release Lock syscall.\n");
     Release_Syscall(machine->ReadRegister(4));
     break;
+
+      case SC_CreateCondition:
+    DEBUG('a', "Create condition syscall.\n");
+    rv = CreateCondition_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+    break;
+      case SC_DestroyCondition:
+    DEBUG('a', "Destroy condition syscall.\n");
+    DestroyCondition_Syscall(machine->ReadRegister(4));
+    break;
+      case SC_Wait:
+    DEBUG('a', "Wait syscall.\n");
+    Wait_Syscall(machine->ReadRegister(4));
+    break;
+      case SC_Signal:
+    DEBUG('a', "Signal syscall.\n");
+    Signal_Syscall(machine->ReadRegister(4));
+    break;
+      case SC_Broadcast:
+    DEBUG('a', "Broadcast syscall.\n");
+    Broadcast_Syscall(machine->ReadRegister(4));
+    break;
+      case SC_Fork:
+    DEBUG('a', "Fork syscall.\n");
+    Fork_Syscall(machine->ReadRegister(4));
+    break;
+      case SC_PrintfInt:
+    DEBUG('a', "PrintfInt syscall.\n");
+    PrintfInt_Syscall(machine->ReadRegister(4), machine->ReadRegister(5), machine->ReadRegister(6));
+    break;
+
 	}
 
 	// Put in the return value and increment the PC

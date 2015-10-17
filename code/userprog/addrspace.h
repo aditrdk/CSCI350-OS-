@@ -18,7 +18,7 @@
 #include "table.h"
 
 #define UserStackSize		1024 	// increase this as necessary!
-
+#define numStacks 42
 #define MaxOpenFiles 256
 #define MaxChildSpaces 256
 
@@ -35,12 +35,17 @@ class AddrSpace {
     void SaveState();			// Save/restore address space-specific
     void RestoreState();		// info on a context switch
     Table fileTable;			// Table of openfiles
+    unsigned int numStackPages;
+    unsigned int numCodePages;
+    Lock *stackMapLock;
 
+    BitMap stackMap;
  private:
     TranslationEntry *pageTable;	// Assume linear page table translation
 					// for now!
-    unsigned int numPages;		// Number of pages in the virtual 
-					// address space
+    unsigned int numPages;      // Number of pages of code, init, and uninit in the virtual 
+                    // address space
+
 };
 
 #endif // ADDRSPACE_H

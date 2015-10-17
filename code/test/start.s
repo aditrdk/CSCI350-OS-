@@ -162,6 +162,54 @@ Release:
 	j	$31
 	.end Release
 
+	.globl CreateCondition
+	.ent	CreateCondition
+CreateCondition:
+	addiu $2,$0,SC_CreateCondition
+	syscall
+	j	$31
+	.end CreateCondition
+
+	.globl DestroyCondition
+	.ent	DestroyCondition
+DestroyCondition:
+	addiu $2,$0,SC_DestroyCondition
+	syscall
+	j	$31
+	.end DestroyCondition
+
+	.globl Wait
+	.ent	Wait
+Wait:
+	addiu $2,$0,SC_Wait
+	syscall
+	j	$31
+	.end Wait
+
+	.globl Signal
+	.ent	Signal
+Signal:
+	addiu $2,$0,SC_Signal
+	syscall
+	j	$31
+	.end Signal
+
+	.globl Broadcast
+	.ent	Broadcast
+Broadcast:
+	addiu $2,$0,SC_Broadcast
+	syscall
+	j	$31
+	.end Broadcast
+
+	.globl PrintfInt
+	.ent	PrintfInt
+PrintfInt:
+	addiu $2,$0,SC_PrintfInt
+	syscall
+	j	$31
+	.end PrintfInt
+
 /* dummy function to keep gcc happy */
         .globl  __main
         .ent    __main
