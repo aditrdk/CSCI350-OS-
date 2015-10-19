@@ -34,12 +34,16 @@ class AddrSpace {
 
     void SaveState();			// Save/restore address space-specific
     void RestoreState();		// info on a context switch
+    void AllocateStack(int stackID);
+    void DeallocateStack(int stackID);
+    void DeallocatePage(int pageNo);
     Table fileTable;			// Table of openfiles
     unsigned int numStackPages;
     unsigned int numCodePages;
     Lock *stackMapLock;
 
     BitMap stackMap;
+    int tableIndex;
  private:
     TranslationEntry *pageTable;	// Assume linear page table translation
 					// for now!

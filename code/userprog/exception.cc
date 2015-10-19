@@ -236,6 +236,25 @@ void Yield_Syscall() {
 }
 
 void Exit_Syscall(int status) {
+  KernelProcess *kp;
+  kp = (KernelProcess*)processTable.Get(currentThread->space->tableIndex);
+  processTableLock->Acquire();
+  kp->numThreads--;
+  kp->numRunningThreads--;
+  if(kp->numRunningThreads == 0) {
+    printf("ending process");
+      numProcesses--;
+      processTable.Remove(currentThread->space->tableIndex);
+      delete currentThread->space;
+      processTableLock->Release();
+        if(numProcesses == 0) {
+          interrupt->Halt();
+      }
+  }
+  else{   //Thread called exit but is not the last exitting thread in the process
+    currentThread->space->DeallocateStack(currentThread->stackId);
+    processTableLock->Release();
+  }
   currentThread->Finish();
 }
 
@@ -420,28 +439,75 @@ void kernelThread(int vAddr){
 	machine->WriteRegister(NextPCReg, vAddr + 4);
 	currentThread->space->stackMapLock->Acquire();
 	int stackID = currentThread->space->stackMap.Find();
-		currentThread->space->stackMapLock->Release();
+	currentThread->space->stackMapLock->Release();
 
 	if(stackID == -1){
 		printf("Cannot Fork. Not enough available threads in current process.");
 		Exit_Syscall(-1);
 	}
+  currentThread->stackId = stackID;
+  currentThread->space->AllocateStack(stackID);
+
 	printf("Stack id %d\n", stackID);
-	machine->WriteRegister(StackReg, (PageSize * currentThread->space->numCodePages) + (stackID)*UserStackSize - 16);
+	machine->WriteRegister(StackReg, (PageSize * currentThread->space->numCodePages) + (stackID + 1)*UserStackSize - 16);
+  currentThread->space->RestoreState();
 	machine->Run();
 
 }
 
 void Fork_Syscall(int vAddr){
 	Thread* t = new Thread("Kernel Thread");
+  KernelProcess* kp = (KernelProcess*)processTable.Get(currentThread->space->tableIndex);
+  processTableLock->Acquire();
+  kp->numThreads++;
+  kp->numRunningThreads++;
+  processTableLock->Release();
 	t->space = currentThread->space;
 	t->Fork(kernelThread, vAddr);
 
 }
 
+void mainProcessThread(int n) {
+  printf("Starting mainprocess thread\n");
+    currentThread->space->InitRegisters();
+    currentThread->space->RestoreState();  
+    machine->Run();
+}
 
-SpaceId Exec(char *name){
-	return -1;
+int Exec_Syscall(unsigned int vaddr, int len){
+   char *buf;   // Kernel buffer for output
+
+    
+    if ( !(buf = new char[len]) ) {
+    printf("%s","Error allocating kernel buffer for write!\n");
+    return -1;
+    } else {
+        if ( copyin(vaddr,len,buf) == -1 ) {
+        printf("%s","Bad pointer passed to to write: data not written\n");
+        delete[] buf;
+        return -1;
+    }
+    }
+  OpenFile *executable = fileSystem->Open(buf);
+  AddrSpace *space;
+
+  if (executable == NULL) {
+    printf("Unable to open execuatble file %s\n", buf);
+    delete[] buf;
+    return -1;
+  }
+delete[] buf;
+
+  space = new AddrSpace(executable);
+
+  delete executable;      // close file
+
+  //space->InitRegisters();   // set the initial register values
+    Thread* mainThread = new Thread("Main Thread");
+    mainThread->space = space;
+    mainThread->Fork(mainProcessThread, 0);
+
+  return 1;
 }
 
 void ExceptionHandler(ExceptionType which) {
@@ -504,7 +570,6 @@ void ExceptionHandler(ExceptionType which) {
     DEBUG('a', "Release Lock syscall.\n");
     Release_Syscall(machine->ReadRegister(4));
     break;
-
       case SC_CreateCondition:
     DEBUG('a', "Create condition syscall.\n");
     rv = CreateCondition_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
@@ -532,6 +597,10 @@ void ExceptionHandler(ExceptionType which) {
       case SC_PrintfInt:
     DEBUG('a', "PrintfInt syscall.\n");
     PrintfInt_Syscall(machine->ReadRegister(4), machine->ReadRegister(5), machine->ReadRegister(6));
+    break;
+      case SC_Exec:
+    DEBUG('a', "Exec syscall.\n");
+    rv = Exec_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
     break;
 
 	}

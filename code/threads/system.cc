@@ -29,6 +29,13 @@ Lock* conditionTableLock;
 int numConditions = 420;
 BitMap conditionMap(numConditions);
 
+Lock *memoryMapLock;
+BitMap memoryMap(NumPhysPages);
+
+Table processTable(maxProcesses);
+Lock *processTableLock;
+int numProcesses = 0;
+
 #ifdef FILESYS_NEEDED
 FileSystem  *fileSystem;
 #endif
@@ -149,6 +156,8 @@ Initialize(int argc, char **argv)
     threadToBeDestroyed = NULL;
 
 
+    memoryMapLock = new Lock("Memory Map Lock");
+
     //Locks and COnditions
     lockTable = new KernelLock[numLocks]();
     lockTableLock = new Lock("Lock Table Lock");
@@ -156,7 +165,7 @@ Initialize(int argc, char **argv)
     conditionTable = new KernelCondition[numConditions]();
     conditionTableLock = new Lock("Condition Table Lock");
 
-
+    processTableLock = new Lock("Process Table Lock");
     // We didn't explicitly allocate the current thread we are running in.
     // But if it ever tries to give up the CPU, we better have a Thread
     // object to save its state. 
@@ -210,6 +219,8 @@ Cleanup()
     delete timer;
     delete scheduler;
     delete interrupt;
+
+    delete memoryMapLock;
 
     delete [] lockTable;
     delete lockTableLock;
