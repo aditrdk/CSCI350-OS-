@@ -106,6 +106,7 @@ Lock::Lock(char* debugName) {
     queue = new List;
 }
 Lock::~Lock() {
+    //delete name;
     delete queue;
 }
 int Lock::Acquire() {
@@ -178,6 +179,8 @@ int Condition::Wait(Lock* conditionLock) {
     }
     if(waitingLock == NULL) {
         waitingLock = conditionLock;
+        DEBUG('c', conditionLock->getName());
+        DEBUG('c', " is the new waitingLock ***************\n\n");
     }
     else if(conditionLock != waitingLock) {
         printf("Condition Lock %s does not match Waiting Lock %s.\n", conditionLock->getName(), waitingLock->getName());

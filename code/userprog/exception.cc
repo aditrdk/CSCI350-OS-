@@ -263,7 +263,7 @@ int CreateLock_Syscall(unsigned int vaddr, int len) {
       printf("No empty locks in lockTable\n");
     }
     lockTableLock->Release();
-    delete buf;
+    //delete buf;
     return index;
 }
 
@@ -476,7 +476,7 @@ int CreateCondition_Syscall(unsigned int vaddr, int len){
     // Create the file with the name in the user buffer pointed to by
     // vaddr.  The file name is at most MAXFILENAME chars long.  No
     // way to return errors, though...
-    char *buf = new char[len+1];  // Kernel buffer to put the name in
+    char *buf = new char[len];  // Kernel buffer to put the name in
 
     if (!buf) return -1;
 
@@ -486,7 +486,7 @@ int CreateCondition_Syscall(unsigned int vaddr, int len){
       return -1;
     }
 
-    buf[len]='\0';
+    //buf[len]='\0';
     lockTableLock->Acquire();
     int index = conditionMap.Find();
     if(index != -1) {
@@ -499,12 +499,14 @@ int CreateCondition_Syscall(unsigned int vaddr, int len){
       printf("No empty locks in lockTable\n");
     }
     lockTableLock->Release();
-    delete buf;
+    //delete buf;
     return index;
 }
 
 int Wait_Syscall(int index, int lock){
-    DEBUG('a', "Entering wait syscall.\n");
+  printf("Waiting condition Index %d , lock %d", index, lock);
+        printf("lock name is %s\n", lockTable[lock].lock->getName());
+
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
 
     DEBUG('a', "Acquired lockTableLock.\n");
@@ -571,6 +573,7 @@ int Wait_Syscall(int index, int lock){
 }
 
 void Signal_Syscall(int index, int lock){
+  printf("Signalling condition Index %d , lock %d", index, lock);
     lockTableLock->Acquire();
     if(lock < 0 || lock >= numLocks){
       printf("Trying to wait for invalid condition lock %d\n", lock);
@@ -613,7 +616,7 @@ void Signal_Syscall(int index, int lock){
       lockTableLock->Release();
       return;
     }
-
+    DEBUG('a', lockTable[lock].lock->getName());
     int result = conditionTable[index].condition->Signal(lockTable[lock].lock);
 
     if(conditionTable[index].isToBeDeleted && conditionTable[index].waitingThreads == 0){
@@ -693,17 +696,22 @@ void PrintfInt_Syscall(unsigned int vaddr, int len, int id){
 
 
  if ( !(buf = new char[len]) ) {
-  printf("%s","Error allocating kernel buffer for write!\n");
-  return;
-} else {
-  if ( copyin(vaddr,len,buf) == -1 ) {
-   printf("%s","Bad pointer passed to to write: data not written\n");
-   delete[] buf;
-   return;
- }
-}
-printf(buf, id);
-
+    printf("%s","Error allocating kernel buffer for write!\n");
+    return;
+  } else {
+    if ( copyin(vaddr,len,buf) == -1 ) {
+     printf("%s","Bad pointer passed to to write: data not written\n");
+     delete[] buf;
+     return;
+   }
+  }
+  if(id >= 100000) {
+    printf(buf, id/100000 -1, (id%100000)/1000 -1, id % 1000);
+  }else if(id >= 1000){
+    printf(buf, id/1000 - 1, id%1000);
+  }else{
+    printf(buf, id);
+  }
 delete[] buf;
 }
 
@@ -784,6 +792,25 @@ int Exec_Syscall(unsigned int vaddr, int len){
 
 int Rand_Syscall() {
   return rand();
+}
+
+int ReadInt_Syscall(int min, int max) {
+  int userChoice;
+  std::cin>>userChoice;
+  if(std::cin.fail()){
+    std::cin.clear();
+      std::cin.ignore(80, '\n');
+      userChoice = -1;
+  }
+  while(!(userChoice <= max && userChoice >= min)){
+    printf("Not a valid input %d, min %d max %d\n", userChoice, min, max);
+    if(std::cin.fail()){
+      std::cin.clear();
+          std::cin.ignore(80, '\n');
+    }
+    std::cin>>userChoice;
+  }
+  return userChoice;
 }
 
 void ExceptionHandler(ExceptionType which) {
@@ -879,8 +906,12 @@ void ExceptionHandler(ExceptionType which) {
        rv = Exec_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
        break;
        case SC_Rand:
-       DEBUG('a', "Exec syscall.\n");  
+       DEBUG('a', "Rand syscall.\n");  
        rv = Rand_Syscall();
+       break;
+       case SC_ReadInt:
+       DEBUG('a', "Read int syscall.\n");  
+       rv = ReadInt_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
        break;
      }
 

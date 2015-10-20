@@ -40,6 +40,7 @@
 #define SC_Broadcast 19
 #define SC_PrintfInt 20
 #define SC_Rand 21
+#define SC_ReadInt 22
 
 #define MAXFILENAME 256
 
@@ -164,6 +165,8 @@ void Broadcast(int index, int lock);
 void PrintfInt(char* string, int size, int id);
 
 int Rand();
+
+int ReadInt();
 
 #endif /* IN_ASM */
 

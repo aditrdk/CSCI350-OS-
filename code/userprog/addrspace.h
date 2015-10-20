@@ -18,7 +18,7 @@
 #include "table.h"
 
 #define UserStackSize		1024 	// increase this as necessary!
-#define numStacks 42
+#define numStacks 100
 #define MaxOpenFiles 256
 #define MaxChildSpaces 256
 

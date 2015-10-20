@@ -218,6 +218,14 @@ Rand:
 	j	$31
 	.end Rand
 
+	.globl ReadInt
+	.ent	ReadInt
+ReadInt:
+	addiu $2,$0,SC_ReadInt
+	syscall
+	j	$31
+	.end ReadInt
+
 /* dummy function to keep gcc happy */
         .globl  __main
         .ent    __main

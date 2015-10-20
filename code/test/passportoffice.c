@@ -13,7 +13,7 @@
 #include "syscall.h"
 
 
-typedef enum CLERK_STATE {available, busy, onbreak};	
+typedef enum {available, busy, onbreak} CLERK_STATE;	
 typedef enum { false, true } bool;
 
 /*Struct for customer's private data, the variables that are not accessible by other threads
@@ -38,13 +38,6 @@ typedef struct {
 	bool hasPassport;
 	bool hasPaidCashier;
 	int ssn;
-	CustomerData() {
-		appAccepted = false;
-		isPicTaken = false;
-		appFiled = false;
-		hasPassport = false;
-		hasPaidCashier = false;
-	}
 } CustomerData;
 
 /*Generic clerk data*/
@@ -58,12 +51,6 @@ typedef struct {
 	int ClerkLock; 
 	int ClerkCV;
 	int dataIn;				/*Variable for passing data between clerk and customer*/
-	Clerk() {
-		numLine = 0;
-		numBribeLine = 0;
-		servedOne = false;
-		state = busy;
-	}
 }  Clerk;
 
 
@@ -92,35 +79,36 @@ int numCustomersOutside = 0;
 
 int appLineLock;
 int appBreakCondition;
-Clerk* appClerks;
+Clerk appClerks[5];
 int numAppClerksAwake;
 int appClerkCash = 0; /*Bribe line money Locked by line lock*/
 
 int picLineLock;
 int picBreakCondition;
-Clerk* picClerks;
+Clerk picClerks[5];
 int numPicClerksAwake;
 int picClerkCash = 0; /*Bribe line money Locked by line lock*/
 
 int passLineLock;
 int passBreakCondition;
-Clerk* passClerks;
+Clerk passClerks[5];
 int numPassClerksAwake;
 int passClerkCash= 0; /*Bribe line money Locked by line lock*/
 
 int cashLineLock;
 int cashBreakCondition;
-Clerk* cashClerks;
+Clerk cashClerks[5];
 int numCashClerksAwake;
 int cashClerkCash= 0; /*Locked by line lock and special cashCashLock*/
 int cashCashLock; /*extra lock for cashier cash variable because it is modified other than during the line bribing*/
 
 /*Passport office's internal database. */
-CustomerData* customersDatabase;
+CustomerData customersDatabase[60];
 
 
 
 void initializeVariables(){
+	int i;
 	/* Create Locks and Syscalls */
 	numCustomersLock = CreateLock("NumCustomersLock", sizeof("NumCustomersLock"));
 
@@ -139,7 +127,54 @@ void initializeVariables(){
 	cashLineLock = CreateLock("CashLineLock", sizeof("CashLineLock"));
 	cashBreakCondition = CreateCondition("CashBreakCV", sizeof("CashBreakCV"));
 	cashCashLock = CreateLock("CashCashLock", sizeof("CashCashLock")); /*extra lock for cashier cash variable because it is modified other than during the line bribing*/
+	for(i = 0; i < numAppClerks; i++) {
+		Clerk* ac = &appClerks[i];
+		ac->numLine = 0;
+		ac->numBribeLine = 0;
+		ac->servedOne = false;
+		ac->state = busy;
+		ac->waitCondition = CreateCondition("appClerk_WaitCondition", sizeof("appClerk_WaitCondition"));
+		ac->bribeWaitCondition = CreateCondition("appClerk_BribeWaitCondition", sizeof("appClerk_BribeWaitCondition"));
+		ac->ClerkLock = CreateLock("appClerk_ClerkLock", sizeof("appClerk_ClerkLock"));
+		PrintfInt("lock is %d\n\n", sizeof("lock is %d\n\n"), ac->ClerkLock);
+		ac->ClerkCV = CreateCondition("appClerk_ClerkCV", sizeof("appClerk_ClerkCV"));
+	}
+	for(i = 0; i < numPicClerks; i++) {
+		Clerk* pc = &picClerks[i];
+		pc->numLine = 0;
+		pc->numBribeLine = 0;
+		pc->servedOne = false;
+		pc->state = busy;
+		pc->waitCondition = CreateCondition("picClerk_WaitCondition", sizeof("picClerk_WaitCondition"));
+		pc->bribeWaitCondition = CreateCondition("picClerk_BribeWaitCondition", sizeof("picClerk_BribeWaitCondition"));
+		pc->ClerkLock = CreateLock("picClerk_ClerkLock", sizeof("picClerk_ClerkLock"));
+		pc->ClerkCV = CreateCondition("picClerk_ClerkCV", sizeof("picClerk_ClerkCV"));
+	}
+	for(i = 0; i < numPassClerks; i++) {
+		Clerk* ac = &passClerks[i];
+		ac->numLine = 0;
+		ac->numBribeLine = 0;
+		ac->servedOne = false;
+		ac->state = busy;
+		ac->waitCondition = CreateCondition("passClerk_WaitCondition", sizeof("passClerk_WaitCondition"));
+		ac->bribeWaitCondition = CreateCondition("passClerk_BribeWaitCondition", sizeof("passClerk_BribeWaitCondition"));
+		ac->ClerkLock = CreateLock("passClerk_ClerkLock", sizeof("passClerk_ClerkLock"));
+		ac->ClerkCV = CreateCondition("passClerk_ClerkCV", sizeof("passClerk_ClerkCV"));
+	}
+	for(i = 0; i < numCashClerks; i++) {
+		Clerk* ac = &cashClerks[i];
+		ac->numLine = 0;
+		ac->numBribeLine = 0;
+		ac->servedOne = false;
+		ac->state = busy;
+		ac->waitCondition = CreateCondition("cashClerk_WaitCondition", sizeof("cashClerk_WaitCondition"));
+		ac->bribeWaitCondition = CreateCondition("cashClerk_BribeWaitCondition", sizeof("cashClerk_BribeWaitCondition"));
+		ac->ClerkLock = CreateLock("cashClerk_ClerkLock", sizeof("cashClerk_ClerkLock"));
+		ac->ClerkCV = CreateCondition("cashClerk_ClerkCV", sizeof("cashClerk_ClerkCV"));
+	}
+
 }
+
 
 /*Function that customers go through at creation so they can be manipulated for better testing*/
 void initializeCustomerForTest(Customer* c){
@@ -176,20 +211,20 @@ void initializeCustomerForTest(Customer* c){
 void CustomerThread(int index) {
 	int clerkChoice;
 	/*Initialize new customer*/
-	Customer* c = new Customer();
-	c->ssn = index;
-	c->appAccepted = false;
-	c->isPicTaken = false;
-	c->appFiled = false;
-	c->hasPassport = false;
-	c->hasPaidCashier = false;
-	c->cash = (Rand()%4)*500 + 100;
+	Customer c;
+	c.ssn = index;
+	c.appAccepted = false;
+	c.isPicTaken = false;
+	c.appFiled = false;
+	c.hasPassport = false;
+	c.hasPaidCashier = false;
+	c.cash = (Rand()%4)*500 + 100;
 
-	initializeCustomerForTest(c);
+	initializeCustomerForTest(&c);
 
 
 	/*Loop until the customer has a passport*/
-	while(!c->hasPassport){
+	while(!c.hasPassport){
 
 		/*Check for senators*/
 		Acquire(SenatorLock);
@@ -208,7 +243,7 @@ void CustomerThread(int index) {
 
 
 		/* Choosing Application clerk*/
-		if(!c->appAccepted && clerkChoice == 0){
+		if(!c.appAccepted && clerkChoice == 0){
 			int myLine = -1;
 			int lineSize = 10000;		
 			bool bribe = false;
@@ -216,7 +251,7 @@ void CustomerThread(int index) {
 			Acquire(appLineLock);	/*check app clerk line*/
 
 			/*Decide whether to bribe*/
-			if(c->cash >= 500){
+			if(c.cash >= 500){
 				bribe = true;
 			}
 
@@ -255,7 +290,7 @@ void CustomerThread(int index) {
 				appClerks[myLine].numBribeLine++;
 				PrintfInt("Customer %d has gotten in bribe line for ApplicationClerk %d\n", sizeof("Customer %d has gotten in bribe line for ApplicationClerk %d\n"), 1000+1000* index +  myLine);
 				PrintfInt("ApplicationClerk %d has received $500 from Customer %d\n", sizeof("ApplicationClerk %d has received $500 from Customer %d\n"), 1000+1000*myLine + index);
-				c->cash -= 500;
+				c.cash -= 500;
 				appClerkCash += 500;
 				Wait(appClerks[myLine].bribeWaitCondition, appLineLock);
 				appClerks[myLine].numBribeLine--;
@@ -269,17 +304,17 @@ void CustomerThread(int index) {
 				continue;
 			}
 			Acquire(appClerks[myLine].ClerkLock);
-			appClerks[myLine].dataIn = c->ssn;
-			PrintfInt("Customer %d has given SSN %d to ApplicationClerk %d\n", sizeof("Customer %d has given SSN %d to ApplicationClerk %d\n"), 100000+100000*index + 1000+1000*c->ssn + myLine);
+			appClerks[myLine].dataIn = c.ssn;
+			PrintfInt("Customer %d has given SSN %d to ApplicationClerk %d\n", sizeof("Customer %d has given SSN %d to ApplicationClerk %d\n"), 100000+100000*index + 1000+1000*c.ssn + myLine);
 			Signal(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 			Wait(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and file application*/
-			c->appAccepted = true;
+			c.appAccepted = true;
 			Signal(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock);/*Signal that customer is leaving counter*/
 			Release(appClerks[myLine].ClerkLock);
 		}
 		
 		/*/* Choosing Picture clerk*/
-		if(!c->isPicTaken && clerkChoice == 1){
+		if(!c.isPicTaken && clerkChoice == 1){
 			/*Going to Picture Clerk*/
 			int myLine = -1;
 			int lineSize = 10000;	
@@ -289,7 +324,7 @@ void CustomerThread(int index) {
 			Acquire(picLineLock);
 
 			/*Decide whether to bribe*/
-			if(c->cash >= 500){
+			if(c.cash >= 500){
 				bribe = true;
 			}	
 			for(i = 0; i < numPicClerks; i++) {		
@@ -328,7 +363,7 @@ void CustomerThread(int index) {
 				picClerks[myLine].numBribeLine++;
 				PrintfInt("Customer %d has gotten in bribe line for PictureClerk %d\n", sizeof("Customer %d has gotten in bribe line for PictureClerk %d\n"), 1000+1000* index + myLine);
 				PrintfInt("PictureClerk %d has received $500 from Customer %d\n", sizeof("PictureClerk %d has received $500 from Customer %d\n"), 1000+1000* myLine + index);
-				c->cash -= 500;
+				c.cash -= 500;
 				picClerkCash += 500;
 				Wait(picClerks[myLine].bribeWaitCondition, picLineLock);
 				picClerks[myLine].numBribeLine--;
@@ -342,8 +377,8 @@ void CustomerThread(int index) {
 				continue;
 			}
 			Acquire(picClerks[myLine].ClerkLock);
-			picClerks[myLine].dataIn = c->ssn;
-			PrintfInt("Customer %d has given SSN %d to PictureClerk %d\n", sizeof("Customer %d has given SSN %d to PictureClerk %d\n"), 100000+ 100000*index + 1000 + 1000*c->ssn + myLine);
+			picClerks[myLine].dataIn = c.ssn;
+			PrintfInt("Customer %d has given SSN %d to PictureClerk %d\n", sizeof("Customer %d has given SSN %d to PictureClerk %d\n"), 100000+ 100000*index + 1000 + 1000*c.ssn + myLine);
 			Signal(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 			Wait(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and take pic*/
 			likesPic = Rand()%2;
@@ -352,7 +387,7 @@ void CustomerThread(int index) {
 				PrintfInt("Customer %d does not like their picture from PictureClerk %d\n", sizeof("Customer %d does not like their picture from PictureClerk %d\n"), 1000 + 1000* index + myLine);
 			}else{ /*Likes Pic*/
 				PrintfInt("Customer %d does like their picture from PictureClerk %d\n", sizeof("Customer %d does like their picture from PictureClerk %d\n"), 1000 + 1000 * index + myLine);
-				c->isPicTaken = true;
+				c.isPicTaken = true;
 			}
 			Signal(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*signalling whether he likes picture or not*/
 			Wait(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Waiting for clerk to process pic or send customer away*/
@@ -360,7 +395,7 @@ void CustomerThread(int index) {
 		}
 
 		/* Choosing Passport clerk*/
-		if(!c->appFiled && clerkChoice == 2) {
+		if(!c.appFiled && clerkChoice == 2) {
 			int myLine = -1;
 			int lineSize = 10000;	
 			bool bribe = false;
@@ -368,7 +403,7 @@ void CustomerThread(int index) {
 			Acquire(passLineLock);
 
 			/*Decide whether to bribe*/
-			if(c->cash >= 500){
+			if(c.cash >= 500){
 				bribe = true;
 			}	
 			for(i = 0; i < numPassClerks; i++) {		
@@ -407,7 +442,7 @@ void CustomerThread(int index) {
 				passClerks[myLine].numBribeLine++;
 				PrintfInt("Customer %d has gotten in bribe line for PassportClerk %d at position %d\n", sizeof("Customer %d has gotten in bribe line for PassportClerk %d at position %d\n"),100000+100000* index + 1000 + 1000* myLine + passClerks[myLine].numBribeLine);
 				PrintfInt("PassportClerk %d has received $500 from Customer %d\n", sizeof("PassportClerk %d has received $500 from Customer %d\n"), 1000+ 1000* myLine + index);
-				c->cash -= 500;
+				c.cash -= 500;
 				passClerkCash += 500;
 				Wait(passClerks[myLine].bribeWaitCondition, passLineLock);
 				passClerks[myLine].numBribeLine--;
@@ -421,11 +456,11 @@ void CustomerThread(int index) {
 				continue;
 			}
 			Acquire(passClerks[myLine].ClerkLock);
-			passClerks[myLine].dataIn = c->ssn;
-			PrintfInt("Customer %d has given SSN %d to PassportClerk %d\n", sizeof("Customer %d has given SSN %d to PassportClerk %d\n"), 100000+100000* index + 1000 + 1000* c->ssn + myLine);
+			passClerks[myLine].dataIn = c.ssn;
+			PrintfInt("Customer %d has given SSN %d to PassportClerk %d\n", sizeof("Customer %d has given SSN %d to PassportClerk %d\n"), 100000+100000* index + 1000 + 1000* c.ssn + myLine);
 			Signal(passClerks[myLine].ClerkCV, passClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 			Wait(passClerks[myLine].ClerkCV, passClerks[myLine].ClerkLock);
-			if(!(c->appAccepted && c->isPicTaken)) {
+			if(!(c.appAccepted && c.isPicTaken)) {
 				int waitTime = Rand()%901 + 100;
 				int i;
 				PrintfInt("Customer %d has gone to PassportClerk %d too soon. They are going to the back of the line.\n", sizeof("Customer %d has gone to PassportClerk %d too soon. They are going to the back of the line.\n"), 1000+1000* index + myLine);
@@ -435,13 +470,13 @@ void CustomerThread(int index) {
 				}
 			}
 			else {
-				c->appFiled = true;
+				c.appFiled = true;
 				Release(passClerks[myLine].ClerkLock);
 			}
 		}
 
 		/* Choosing Cashier*/
-		if(!c->hasPassport && clerkChoice == 3) {
+		if(!c.hasPassport && clerkChoice == 3) {
 			int myLine = -1;
 			int lineSize = 10000;	
 			bool bribe = false;
@@ -449,7 +484,7 @@ void CustomerThread(int index) {
 			Acquire(cashLineLock);
 
 			/*Decide whether to bribe*/
-			if(c->cash >= 500){
+			if(c.cash >= 500){
 				bribe = true;
 			}	
 			for(i = 0; i < numCashClerks; i++) {		
@@ -487,7 +522,7 @@ void CustomerThread(int index) {
 				cashClerks[myLine].numBribeLine++;
 				PrintfInt("Customer %d has gotten in bribe line for Cashier %d at position %d\n", sizeof("Customer %d has gotten in bribe line for Cashier %d at position %d\n"),100000+100000* index + 1000+1000* myLine + cashClerks[myLine].numBribeLine);
 				PrintfInt("Cashier %d has received $500 from Customer %d\n", sizeof("Cashier %d has received $500 from Customer %d\n"), 1000+1000* myLine + index);
-				c->cash -= 500;
+				c.cash -= 500;
 				Acquire(cashCashLock);
 				cashClerkCash += 500;
 				Release(cashCashLock);
@@ -503,16 +538,16 @@ void CustomerThread(int index) {
 			Release(cashLineLock);
 			/*Check if they were taken out of line because of a senator*/
 			Acquire(cashClerks[myLine].ClerkLock);
-			cashClerks[myLine].dataIn = c->ssn;
-			PrintfInt("Customer %d has given SSN %d to Cashier %d\n", sizeof("Customer %d has given SSN %d to Cashier %d\n"), 100000+100000* index + 1000 + 1000* c->ssn + myLine);
-			if(!c->hasPaidCashier) {		/*pay now if they havent paid yet*/
-				c->cash -= 100;
-				c->hasPaidCashier = true;
+			cashClerks[myLine].dataIn = c.ssn;
+			PrintfInt("Customer %d has given SSN %d to Cashier %d\n", sizeof("Customer %d has given SSN %d to Cashier %d\n"), 100000+100000* index + 1000 + 1000* c.ssn + myLine);
+			if(!c.hasPaidCashier) {		/*pay now if they havent paid yet*/
+				c.cash -= 100;
+				c.hasPaidCashier = true;
 				PrintfInt("Customer %d has given Cashier %d 100$.\n", sizeof("Customer %d has given Cashier %d 100$.\n"), 1000 + 1000* index + myLine);
 			}
 			Signal(cashClerks[myLine].ClerkCV, cashClerks[myLine].ClerkLock); /*Signal that ssn and money has been given*/			
 			Wait(cashClerks[myLine].ClerkCV, cashClerks[myLine].ClerkLock);
-			if(!(c->appAccepted && c->isPicTaken && c->appFiled)) {
+			if(!(c.appAccepted && c.isPicTaken && c.appFiled)) {
 				int waitTime = Rand()%901 + 100;
 				int i;
 				PrintfInt("Customer %d has gone to Cashier %d too soon. They are going to the back of the line.\n", sizeof("Customer %d has gone to Cashier %d too soon. They are going to the back of the line.\n"), 1000 + 1000*index + myLine);
@@ -522,7 +557,7 @@ void CustomerThread(int index) {
 				}
 			}
 			else {
-				c->hasPassport = true;						/*The customer has received their passport*/
+				c.hasPassport = true;						/*The customer has received their passport*/
 				Acquire(numCustomersLock);
 				numCustomersWhoHaveLeftTheOffice++;
 				Release(numCustomersLock);
@@ -531,7 +566,7 @@ void CustomerThread(int index) {
 			}
 		}
 	}
-
+	Exit(0);
 }
 
 void SenatorThread(int index){
@@ -540,14 +575,14 @@ void SenatorThread(int index){
 	int waitTime;
 	int i;
 	int myLine, likesPic;
-	Customer* s = new Customer(index + numCustomers);
-	s->ssn = index;
-	s->appAccepted = false;
-	s->isPicTaken = false;
-	s->appFiled = false;
-	s->hasPassport = false;
-	s->hasPaidCashier = false;
-	s->cash = (Rand()%4)*500 + 100;
+	Customer s;
+	s.ssn = index + numCustomers;
+	s.appAccepted = false;
+	s.isPicTaken = false;
+	s.appFiled = false;
+	s.hasPassport = false;
+	s.hasPaidCashier = false;
+	s.cash = (Rand()%4)*500 + 100;
 	waitTime = Rand() % 901 + 100;
 	for(i = 0; i < waitTime; i++) Yield();
 	Acquire(SenatorLock);
@@ -604,16 +639,16 @@ void SenatorThread(int index){
 	Release(appLineLock);
 
 	Acquire(appClerks[myLine].ClerkLock);
-	appClerks[myLine].dataIn = s->ssn;
-	PrintfInt("Senator %d has given SSN %d to ApplicationClerk %d\n", index, s->ssn, myLine);
+	appClerks[myLine].dataIn = s.ssn;
+	PrintfInt("Senator %d has given SSN %d to ApplicationClerk %d\n", sizeof("Senator %d has given SSN %d to ApplicationClerk %d\n"), 100000 + 100000 * index + 1000 + 1000* s.ssn + myLine);
 	Signal(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 	Wait(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and file application*/
-	s->appAccepted = true;
+	s.appAccepted = true;
 	Signal(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock);/*Signal that customer is leaving counter*/
 	Release(appClerks[myLine].ClerkLock);
 
 	/*Picture Clerk*/
-	while(!s->isPicTaken) {
+	while(!s.isPicTaken) {
 		Acquire(picLineLock);
 		myLine = -1;
 		for(i = 0; i < numPicClerks; i++) {
@@ -631,8 +666,8 @@ void SenatorThread(int index){
 		picClerks[myLine].state = busy;
 		Release(picLineLock);
 		Acquire(picClerks[myLine].ClerkLock);
-		picClerks[myLine].dataIn = s->ssn;
-		PrintfInt("Senator %d has given SSN %d to PictureClerk %d\n", sizeof("Senator %d has given SSN %d to PictureClerk %d\n"), 100000+100000* index + 1000 + 1000* s->ssn + myLine);
+		picClerks[myLine].dataIn = s.ssn;
+		PrintfInt("Senator %d has given SSN %d to PictureClerk %d\n", sizeof("Senator %d has given SSN %d to PictureClerk %d\n"), 100000+100000* index + 1000 + 1000* s.ssn + myLine);
 		Signal(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 		Wait(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and take pic*/
 		likesPic = Rand()%2;
@@ -641,7 +676,7 @@ void SenatorThread(int index){
 			PrintfInt("Senator %d does not like their picture from PictureClerk %d\n", sizeof("Senator %d does not like their picture from PictureClerk %d\n"), 1000+1000* index + myLine);
 		}else{ /*Likes Pic*/
 			PrintfInt("Senator %d does like their picture from PictureClerk %d\n", sizeof("Senator %d does like their picture from PictureClerk %d\n"), 1000+ 1000* index + myLine);
-			s->isPicTaken = true;
+			s.isPicTaken = true;
 		}
 		Signal(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*signalling whether he likes picture or not*/
 		Wait(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Waiting for clerk to process pic or send customer away*/
@@ -649,7 +684,7 @@ void SenatorThread(int index){
 	}
 
 	/*Passport clerk*/
-	while(!s->appFiled) {
+	while(!s.appFiled) {
 		Acquire(passLineLock);
 		myLine = -1;
 		for( i = 0; i < numPassClerks; i++) {
@@ -668,16 +703,16 @@ void SenatorThread(int index){
 		Release(passLineLock);
 
 		Acquire(passClerks[myLine].ClerkLock);
-		passClerks[myLine].dataIn = s->ssn;
-		PrintfInt("Senator %d has given SSN %d to PassportClerk %d\n", sizeof("Senator %d has given SSN %d to PassportClerk %d\n"), 100000 + 100000* index + 1000 + 1000* s->ssn + myLine);
+		passClerks[myLine].dataIn = s.ssn;
+		PrintfInt("Senator %d has given SSN %d to PassportClerk %d\n", sizeof("Senator %d has given SSN %d to PassportClerk %d\n"), 100000 + 100000* index + 1000 + 1000* s.ssn + myLine);
 		Signal(passClerks[myLine].ClerkCV, passClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 		Wait(passClerks[myLine].ClerkCV, passClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and file application*/
-		s->appFiled = true;
+		s.appFiled = true;
 		Release(passClerks[myLine].ClerkLock);
 	}
 
 	/*Cashier*/
-	while(!s->hasPassport) {
+	while(!s.hasPassport) {
 
 		Acquire(cashLineLock);
 		myLine = -1;
@@ -696,19 +731,19 @@ void SenatorThread(int index){
 		cashClerks[myLine].state = busy;
 		Release(cashLineLock);
 		Acquire(cashClerks[myLine].ClerkLock);
-		cashClerks[myLine].dataIn = s->ssn;
-		PrintfInt("Senator %d has given SSN %d to Cashier %d\n", sizeof("Senator %d has given SSN %d to Cashier %d\n"), 100000 + 100000* index + 1000 + 1000 * s->ssn + myLine);
-		if(!s->hasPaidCashier) {			/*pay now if they havent paid yet  */
-			s->cash -= 100;
-			s->hasPaidCashier = true;
+		cashClerks[myLine].dataIn = s.ssn;
+		PrintfInt("Senator %d has given SSN %d to Cashier %d\n", sizeof("Senator %d has given SSN %d to Cashier %d\n"), 100000 + 100000* index + 1000 + 1000 * s.ssn + myLine);
+		if(!s.hasPaidCashier) {			/*pay now if they havent paid yet  */
+			s.cash -= 100;
+			s.hasPaidCashier = true;
 			PrintfInt("Senator %d has given Cashier %d 100$.\n", sizeof("Senator %d has given Cashier %d 100$.\n"), 1000 + 1000*index + myLine);
 		}
 		Signal(cashClerks[myLine].ClerkCV, cashClerks[myLine].ClerkLock); /*Signal that ssn and money has been given		*/	
 		Wait(cashClerks[myLine].ClerkCV, cashClerks[myLine].ClerkLock); /* Wait to receive passport (they will always go in the right )*/
-		if(!(s->appAccepted && s->isPicTaken && s->appFiled)) {
+		if(!(s.appAccepted && s.isPicTaken && s.appFiled)) {
 			PrintfInt("ERROR Senator %d has gone to cashier %d before other clerks, this shouldn't be possible.", sizeof("ERROR Senator %d has gone to cashier %d before other clerks, this shouldn't be possible."), 1000 + 1000*index + myLine);
 		}
-		s->hasPassport = true;
+		s.hasPassport = true;
 		Release(cashClerks[myLine].ClerkLock);
 	}
 	numSenatorsPresent--;
@@ -718,26 +753,16 @@ void SenatorThread(int index){
 	Acquire(numCustomersLock);
 	numSenatorsWhoHaveLeftTheOffice++;
 	Release(numCustomersLock);
+	Exit(0);
 }
 
 /*Application Clerk thread*/
 void AppClerkThread(int index) {
-	char name[30];
+	char *name;
 	int waitTime;
 	int i;
 	Clerk* ac = &appClerks[index];
-	ac->numLine = 0;
-	ac->numBribeLine = 0;
-	ac->servedOne = false;
-	ac->state = busy;
-	sprintf(name,"appClerk_%d_WaitCondition",index);
-	ac->waitCondition = CreateCondition(name);
-	sprintf(name,"appClerk_%d_BribeWaitCondition",index);
-	ac->bribeWaitCondition = CreateCondition(name);
-	sprintf(name,"appClerk_%d _ClerkLock",index);
-	ac->ClerkLock = CreateLock(name);
-	sprintf(name,"appClerk_%d _ClerkCV",index);
-	ac->ClerkCV = CreateCondition(name);	
+	
 	while(true){
 
 		/*End of simulation condition*/
@@ -783,27 +808,16 @@ void AppClerkThread(int index) {
 		ac->servedOne = true;
 		Release(ac->ClerkLock);
 	}
+	Exit(0);
 }
 
 /*Picture clerk thread*/
 void PicClerkThread(int index){
-	char name[30];
+	char* name;
 	int waitTime;
 	int customerID;
 	int i;
 	Clerk* pc = &picClerks[index];
-	pc->numLine = 0;
-	pc->numBribeLine = 0;
-	pc->servedOne = false;
-	pc->state = busy;
-	sprintf(name,"picClerk_%d_WaitCondition",index);
-	pc->waitCondition = CreateCondition(name);
-	sprintf(name,"picClerk_%d_BribeWaitCondition",index);
-	pc->bribeWaitCondition = CreateCondition(name);
-	sprintf(name,"picClerk_%d _ClerkLock",index);
-	pc->ClerkLock = CreateLock(name);
-	sprintf(name,"picClerk_%d _ClerkCV",index);
-	pc->ClerkCV = CreateCondition(name);
 	while(true){
 		/*End of simulation condition*/
 		if(numCustomersWhoHaveLeftTheOffice + numSenatorsWhoHaveLeftTheOffice == numCustomers + numSenators) {
@@ -852,7 +866,7 @@ void PicClerkThread(int index){
 		else{
 			PrintfInt("PictureClerk %d has been told that Customer %d does like their picture\n", sizeof("PictureClerk %d has been told that Customer %d does like their picture\n"), 1000 + 1000* index + customerID);
 			waitTime = Rand() % 81 + 20;
-			for(int i = 0; i < waitTime; i++) Yield(); /*Process picture for random amount of time(yields)*/
+			for(i = 0; i < waitTime; i++) Yield(); /*Process picture for random amount of time(yields)*/
 				customersDatabase[customerID].isPicTaken = true;
 		}
 		Signal(pc->ClerkCV, pc->ClerkLock); /*Signal to customer picture was processed or that the customer can get back in line*/
@@ -860,28 +874,16 @@ void PicClerkThread(int index){
 
 		Release(pc->ClerkLock);
 	}
+	Exit(0);
 }
 
 /*Passport Clerk Thread*/
 void PassClerkThread(int index) {
-	char name[40];
+	char* name;
 	int waitTime;
 	int customerID;
 	int i;
 	Clerk* ptc = &passClerks[index];
-	ptc->numLine = 0;
-	ptc->numBribeLine = 0;
-	ptc->servedOne = false;
-	ptc->state = busy;
-	
-	sprintf(name,"passClerk_%d_WaitCondition",index);
-	ptc->waitCondition = CreateCondition(name);
-	sprintf(name,"passClerk_%d_BribeWaitCondition",index);
-	ptc->bribeWaitCondition = CreateCondition(name);
-	sprintf(name,"passClerk_%d _ClerkLock",index);
-	ptc->ClerkLock = CreateLock(name);
- 	sprintf(name,"passClerk_%d _ClerkCV",index);
-	ptc->ClerkCV = CreateCondition(name);
 
 	while(true) {
 		
@@ -933,30 +935,20 @@ void PassClerkThread(int index) {
 		ptc->servedOne = true;
 		Release(ptc->ClerkLock);
 	}
+	Exit(0);
 }
 
 /*Cashier Thread*/
 void CashClerkThread(int index) {
-	char name[40];
+	char* name;
 	int waitTime;
 	int i;
 	int customerID;
 	Clerk* cc = &cashClerks[index];
-	cc->numLine = 0;
-	cc->numBribeLine = 0;
-	cc->servedOne = false;
-	cc->state = busy;
-	sprintf(name,"cashClerk_%d_WaitCondition",index);
-	cc->waitCondition = CreateCondition(name);
-	sprintf(name,"cashClerk_%d_BribeWaitCondition",index);
-	cc->bribeWaitCondition = CreateCondition(name);
-	sprintf(name,"cashClerk_%d _ClerkLock",index);
-	cc->ClerkLock = CreateLock(name);
-	sprintf(name,"cashClerk_%d _ClerkCV",index);
-	cc->ClerkCV = CreateCondition(name);
+
 	while(true) {
 		
-		/*End of simulation condition
+		/*End of simulation condition*/
 		if(numCustomersWhoHaveLeftTheOffice + numSenatorsWhoHaveLeftTheOffice == numCustomers + numSenators) {	/*If all customers have got their passports then end the thread*/
 			break;
 		}
@@ -992,7 +984,7 @@ void CashClerkThread(int index) {
 
 		Wait(cc->ClerkCV, cc->ClerkLock); /*Wait for customer to give ssn*/
 		customerID = cc->dataIn;
-		PrintfInt("Cashier %d has received a SSN %d from Customer %d\n", sizeof("Cashier %d has received a SSN %d from Customer %d\n"), 100000+ 100000* index 1000 + 1000 * customerID + customerID);
+		PrintfInt("Cashier %d has received a SSN %d from Customer %d\n", sizeof("Cashier %d has received a SSN %d from Customer %d\n"), 100000+ 100000* index + 1000 + 1000 * customerID + customerID);
 		if((customersDatabase[customerID].isPicTaken && customersDatabase[customerID].appAccepted && customersDatabase[customerID].appFiled)) {		/*checking if the customer has been certified yet*/
 			PrintfInt("Cashier %d has verified that Customer %d has been certified by a PassportClerk\n", sizeof("Cashier %d has verified that Customer %d has been certified by a PassportClerk\n"), 1000 + 1000* index + customerID);	
 			if(!customersDatabase[customerID].hasPaidCashier) {
@@ -1021,13 +1013,14 @@ void CashClerkThread(int index) {
 		cc->servedOne = true;
 		Release(cc->ClerkLock);
 	}
+	Exit(0);
 }
 
 void ManagerThread(int index) {
 	int iterations = 0, total = 0, printCount = 10;
 	while(true) {
-		total = 0;
 		int i, in;
+		total = 0;
 
 		Acquire(appLineLock);
 		for(i = 0; i < numAppClerks; i++) {
@@ -1110,6 +1103,7 @@ void ManagerThread(int index) {
 		}
 		iterations++;
 	}
+	Exit(0);
 }
 
 
@@ -1119,12 +1113,6 @@ void StartSimulation(){
 	numPicClerksAwake = numPicClerks;
 	numPassClerksAwake = numPassClerks;
 	numCashClerksAwake = numCashClerks;
-	customersDatabase = new CustomerData[numCustomers + numSenators];
-	appClerks = new Clerk[numAppClerks]();
-	picClerks = new Clerk[numPicClerks]();
-	passClerks = new Clerk[numPassClerks]();
-	cashClerks = new Clerk[numCashClerks]();
-
 	for(i = 0; i < numAppClerks; i++) {
 		Fork(AppClerkThread);
 	}
@@ -1154,7 +1142,7 @@ void StartSimulation(){
 
 /*Part 2 of the project gives user choice of test to run*/
 void main() {
-	initializeVariables();
+	
 	Write("Enter the number of the test you would like to run", sizeof("Enter the number of the test you would like to run"), ConsoleOutput);
 	Write("Test 1: Customers always take the shortest line, but no 2 customers ever choose the same shortest line at the same time", sizeof("Test 1: Customers always take the shortest line, but no 2 customers ever choose the same shortest line at the same time"), ConsoleOutput);
 	Write("Test 2: Managers only read one from one Clerk's total money received, at a time.", sizeof("Test 2: Managers only read one from one Clerk's total money received, at a time."), ConsoleOutput);
@@ -1165,26 +1153,13 @@ void main() {
 	Write("Test 7: The behavior of Customers is proper when Senators arrive. This is before, during, and after.", sizeof("Test 7: The behavior of Customers is proper when Senators arrive. This is before, during, and after."), ConsoleOutput);
 	Write("Test 8: Full Simulation, user chooses number of threads", sizeof("Test 8: Full Simulation, user chooses number of threads"), ConsoleOutput);
 
-	std::cin>>userChoice;
-	if(std::cin.fail()){
-		std::cin.clear();
-    	std::cin.ignore(80, '\n');
-    	userChoice = -1;
-	}
-	while(!(userChoice <= 8 && userChoice >= 1)){
-		PrintfInt("Not a valid test %d \n", sizeof("Not a valid test %d \n"), userChoice);
-		if(std::cin.fail()){
-			std::cin.clear();
-        	std::cin.ignore(80, '\n');
-		}
-		std::cin>>userChoice;
-	}
+	userChoice = ReadInt(1, 8);
 
 	/*Set number of each thread based on user choice*/
 	switch(userChoice){
 		case 1:
 		case 3:
-			numCustomers = 0;
+			numCustomers = 5;
 			numSenators = 0;
 			numAppClerks = 0;
 			numPicClerks = 0;
@@ -1230,22 +1205,21 @@ void main() {
 
 			/*Allow user to specify number of each thread*/
 			Write("Enter number of customers.\n", sizeof("Enter number of customers.\n"), ConsoleOutput);
-			std::cin>>numCustomers;
+			numCustomers = ReadInt(0, 50);
 			Write("Enter number of senators.\n", sizeof("Enter number of senators.\n"), ConsoleOutput);
-			std::cin>>numSenators; 
+			numSenators = ReadInt(0, 10); 
 			Write("Enter number of ApplicationClerks.\n", sizeof("Enter number of ApplicationClerks.\n"), ConsoleOutput);
-			std::cin>>numAppClerks;
+			numAppClerks = ReadInt(1, 5);
 			Write("Enter number of PictureClerks.\n", sizeof("Enter number of PictureClerks.\n"), ConsoleOutput);
-			std::cin>>numPicClerks;
+			numPicClerks = ReadInt(1, 5);
 			Write("Enter number of PassportClerks.\n", sizeof("Enter number of PassportClerks.\n"), ConsoleOutput);
-			std::cin>>numPassClerks;
+			numPassClerks = ReadInt(1, 5);
 			Write("Enter number of Cashiers.\n", sizeof("Enter number of Cashiers.\n"), ConsoleOutput);
-			std::cin>>numCashClerks;
+			numCashClerks = ReadInt(1, 5);
 			break;
 	}
+	initializeVariables();
 	StartSimulation();
-
+	Exit(0);
 
 }
-
-#endif
