@@ -17,6 +17,7 @@
 #include "timer.h"
 #include "bitmap.h"
 #include "synch.h"
+#include "table.h"
 
 struct KernelLock {
     Lock* lock;
@@ -27,9 +28,16 @@ struct KernelLock {
 
 struct KernelCondition{
     Condition* condition;
+    Lock* conditionLock;
     AddrSpace *owner;
     bool isToBeDeleted;
     int waitingThreads;
+};
+
+struct KernelProcess{
+    int numThreads;
+    int numRunningThreads;
+    AddrSpace* pSpace;
 };
 
 // Initialization and cleanup routines
@@ -45,6 +53,13 @@ extern Interrupt *interrupt;			// interrupt status
 extern Statistics *stats;			// performance metrics
 extern Timer *timer;				// the hardware alarm clock
 
+extern BitMap memoryMap;
+extern Lock *memoryMapLock;
+
+extern Table processTable;
+extern Lock *processTableLock;
+#define maxProcesses 50
+extern int numProcesses;
 
 extern KernelLock *lockTable;
 extern BitMap lockMap;

@@ -69,8 +69,8 @@ class Lock {
     ~Lock();				// deallocate lock
     char* getName() { return name; }	// debugging assist
 
-    void Acquire(); // these are the only operations on a lock
-    void Release(); // they are both *atomic*
+    int Acquire(); // these are the only operations on a lock
+    int Release(); // they are both *atomic*
 
     bool isHeldByCurrentThread();	// true if the current thread
 					// holds this lock.  Useful for
@@ -124,12 +124,12 @@ class Condition {
     ~Condition();			// deallocate the condition
     char* getName() { return (name); }
     
-    void Wait(Lock *conditionLock); 	// these are the 3 operations on 
+    int Wait(Lock *conditionLock); 	// these are the 3 operations on 
 					// condition variables; releasing the 
 					// lock and going to sleep are 
 					// *atomic* in Wait()
-    void Signal(Lock *conditionLock);   // conditionLock must be held by
-    void Broadcast(Lock *conditionLock);// the currentThread for all of 
+    int Signal(Lock *conditionLock);   // conditionLock must be held by
+    int Broadcast(Lock *conditionLock);// the currentThread for all of 
 					// these operations
 
   private:

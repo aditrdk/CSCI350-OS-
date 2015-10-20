@@ -69,7 +69,7 @@ typedef int SpaceId;
 /* Run the executable, stored in the Nachos file "name", and return the 
  * address space identifier
  */
-SpaceId Exec(char *name);
+SpaceId Exec(char *name, int size);
  
 /* Only return once the the user program "id" has finished.  
  * Return the exit status.
@@ -153,11 +153,11 @@ int CreateCondition(char *name, int size);
 
 void DestroyCondition(int index);
 
-void Wait(int index);
+int Wait(int index, int lock);
 
-void Signal(int index);
+void Signal(int index, int lock);
 
-void Broadcast(int index);
+void Broadcast(int index, int lock);
 
 void PrintfInt(char* string, int size, int id);
 

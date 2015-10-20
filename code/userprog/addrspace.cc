@@ -19,7 +19,6 @@
 #include "system.h"
 #include "addrspace.h"
 #include "noff.h"
-#include "table.h"
 #include "synch.h"
 
 extern "C" { int bzero(char *, int); };
@@ -31,13 +30,13 @@ Table::Table(int s) : map(s), table(0), lock(0), size(s) {
 
 Table::~Table() {
     if (table) {
-	delete table;
-	table = 0;
-    }
-    if (lock) {
-	delete lock;
-	lock = 0;
-    }
+       delete table;
+       table = 0;
+   }
+   if (lock) {
+       delete lock;
+       lock = 0;
+   }
 }
 
 void *Table::Get(int i) {
@@ -56,8 +55,8 @@ int Table::Put(void *f) {
     i = map.Find();
     lock->Release();
     if ( i != -1)
-	table[i] = f;
-    return i;
+       table[i] = f;
+   return i;
 }
 
 void *Table::Remove(int i) {
@@ -67,15 +66,15 @@ void *Table::Remove(int i) {
     void *f =0;
 
     if ( i >= 0 && i < size ) {
-	lock->Acquire();
-	if ( map.Test(i) ) {
-	    map.Clear(i);
-	    f = table[i];
-	    table[i] = 0;
-	}
-	lock->Release();
-    }
-    return f;
+       lock->Acquire();
+       if ( map.Test(i) ) {
+           map.Clear(i);
+           f = table[i];
+           table[i] = 0;
+       }
+       lock->Release();
+   }
+   return f;
 }
 
 //----------------------------------------------------------------------
@@ -120,15 +119,18 @@ SwapHeader (NoffHeader *noffH)
 AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(numStacks) {
     NoffHeader noffH;
     unsigned int i, size;
+    KernelProcess *kp;
     stackMapLock = new Lock("Stack map lock");
-    stackMap.Find();
+    stackMapLock->Acquire();
+    stackMap.Find();  //Finding space for the the first stack
+    stackMapLock->Release();
     // Don't allocate the input or output to disk files
     fileTable.Put(0);
     fileTable.Put(0);
- 
+
     executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
     if ((noffH.noffMagic != NOFFMAGIC) && 
-		(WordToHost(noffH.noffMagic) == NOFFMAGIC))
+      (WordToHost(noffH.noffMagic) == NOFFMAGIC))
     	SwapHeader(&noffH);
     ASSERT(noffH.noffMagic == NOFFMAGIC);
 
@@ -147,37 +149,78 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
 						// virtual memory
 
     DEBUG('a', "Initializing address space, num total pages %d, size %d\n", 
-					numCodePages + numStackPages, size);
+       numCodePages + numStackPages, size);
 // first, set up the translation 
     pageTable = new TranslationEntry[numCodePages + numStackPages];
     for (i = 0; i < numCodePages + numStackPages; i++) {
-	pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
-	pageTable[i].physicalPage = i;
-	pageTable[i].valid = TRUE;
-	pageTable[i].use = FALSE;
-	pageTable[i].dirty = FALSE;
-	pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
-					// a separate page, we could set its 
-					// pages to be read-only
+    	pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
+        if(i < numCodePages + 8) {
+            memoryMapLock->Acquire();
+            int index = memoryMap.Find();
+            //printf("MemoryMap index %d\n", index);
+            memoryMapLock->Release();
+            if(index == -1) {
+                printf("Not enough space in memory for another process\n");
+                ASSERT(FALSE);
+            }
+            pageTable[i].physicalPage = index;
+            pageTable[i].valid = TRUE;
+            currentThread->stackId = 0;
+        }
+        else{
+            pageTable[i].valid = FALSE;
+        }
+        pageTable[i].use = FALSE;
+        pageTable[i].dirty = FALSE;
+    	pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
+    					// a separate page, we could set its 
+    					// pages to be read-only
     }
-    
+
+    //Add the new process to the process table
+    processTableLock->Acquire();
+    numProcesses++;
+    processTableLock->Release();
+    kp = new KernelProcess();
+    kp->numThreads = 1;
+    kp->numRunningThreads = 1;
+    kp->pSpace = this;
+    tableIndex = processTable.Put(kp);
+    if(tableIndex == -1) {
+        printf("Cannot have more than %d processes\n", maxProcesses);
+        ASSERT(FALSE);
+    }
 // zero out the entire address space, to zero the unitialized data segment 
 // and the stack segment
-    bzero(machine->mainMemory, size);
+//  bzero(machine->mainMemory, size);
 
 // then, copy in the code and data segments into memory
-    if (noffH.code.size > 0) {
+    int initPages = divRoundUp(noffH.code.size + noffH.initData.size, PageSize);
+    for(int j = 0; j < initPages; j++) {
+        DEBUG('a', "Initializing code/initdata page, at 0x%x, size %d\n", 
+            pageTable[j].physicalPage * PageSize, PageSize);
+        if(j == initPages -1) {
+            executable->ReadAt(&(machine->mainMemory[pageTable[j].physicalPage * PageSize]),
+                noffH.code.size + noffH.initData.size - j*PageSize, noffH.code.inFileAddr + j*PageSize);
+        }
+        else{
+            executable->ReadAt(&(machine->mainMemory[pageTable[j].physicalPage * PageSize]),
+                PageSize, noffH.code.inFileAddr + j*PageSize);
+        }
+    }
+    /*if (noffH.code.size > 0) {
         DEBUG('a', "Initializing code segment, at 0x%x, size %d\n", 
-			noffH.code.virtualAddr, noffH.code.size);
-        executable->ReadAt(&(machine->mainMemory[noffH.code.virtualAddr]),
+			pageTable[noffH.code.virtualAddr/PageSize].physicalPage * PageSize, noffH.code.size);
+        executable->ReadAt(&(machine->mainMemory[pageTable[noffH.code.virtualAddr].physicalPage * PageSize]),
 			noffH.code.size, noffH.code.inFileAddr);
     }
     if (noffH.initData.size > 0) {
         DEBUG('a', "Initializing data segment, at 0x%x, size %d\n", 
-			noffH.initData.virtualAddr, noffH.initData.size);
-        executable->ReadAt(&(machine->mainMemory[noffH.initData.virtualAddr]),
+			pageTable[noffH.initData.virtualAddr/PageSize].physicalPage * PageSize, noffH.initData.size);
+        executable->ReadAt(&(machine->mainMemory[pageTable[noffH.initData.virtualAddr].physicalPage * PageSize + noffH.code.size]),
 			noffH.initData.size, noffH.initData.inFileAddr);
     }
+    */
 
 }
 
@@ -190,7 +233,13 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
 
 AddrSpace::~AddrSpace()
 {
+    for(int i = 0; i < numCodePages + numStackPages; i++) {
+        if(pageTable[i].valid == true){
+            DeallocatePage(i);
+        }
+    }
     delete pageTable;
+    delete stackMapLock;
 }
 
 //----------------------------------------------------------------------
@@ -209,20 +258,20 @@ AddrSpace::InitRegisters()
     int i;
 
     for (i = 0; i < NumTotalRegs; i++)
-	machine->WriteRegister(i, 0);
+       machine->WriteRegister(i, 0);
 
     // Initial program counter -- must be location of "Start"
-    machine->WriteRegister(PCReg, 0);	
+   machine->WriteRegister(PCReg, 0);	
 
     // Need to also tell MIPS where next instruction is, because
     // of branch delay possibility
-    machine->WriteRegister(NextPCReg, 4);
+   machine->WriteRegister(NextPCReg, 4);
 
    // Set the stack register to the end of the address space, where we
    // allocated the stack; but subtract off a bit, to make sure we don't
    // accidentally reference off the end!
-    machine->WriteRegister(StackReg, numPages * PageSize - 16);
-    DEBUG('a', "Initializing stack register to %x\n", numPages * PageSize - 16);
+   machine->WriteRegister(StackReg, numPages * PageSize - 16);
+   DEBUG('a', "Initializing stack register to %x\n", numPages * PageSize - 16);
 }
 
 //----------------------------------------------------------------------
@@ -248,4 +297,34 @@ void AddrSpace::RestoreState()
 {
     machine->pageTable = pageTable;
     machine->pageTableSize = numStackPages + numCodePages;
+}
+
+void AddrSpace::AllocateStack(int stackID) {
+    memoryMapLock->Acquire();
+    for(int i = numCodePages + stackID*8; i < numCodePages + (stackID+1)*8; i++) {
+        int index = memoryMap.Find();
+        if(index == -1) {
+            printf("Not enough physical memory for another thread stack\n");
+            memoryMapLock->Release();
+            ASSERT(false);
+        }
+        pageTable[i].physicalPage = index;
+        pageTable[i].valid = true;
+    }
+    memoryMapLock->Release();
+}
+
+void AddrSpace::DeallocateStack(int stackID) {
+    for(int i = numCodePages + stackID*8; i < numCodePages + (stackID+1)*8; i++) {
+        DeallocatePage(i);
+    }
+}
+
+void AddrSpace::DeallocatePage(int pageNo) {
+    memoryMapLock->Acquire();
+    int index = pageTable[pageNo].physicalPage;
+    memoryMap.Clear(index);
+    bzero(&machine->mainMemory[index*PageSize], PageSize);
+    pageTable[pageNo].valid = false;
+    memoryMapLock->Release();
 }
