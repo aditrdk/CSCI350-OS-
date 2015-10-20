@@ -153,11 +153,11 @@ int CreateCondition(char *name, int size);
 
 void DestroyCondition(int index);
 
-void Wait(int index);
+int Wait(int index, int lock);
 
-void Signal(int index);
+void Signal(int index, int lock);
 
-void Broadcast(int index);
+void Broadcast(int index, int lock);
 
 void PrintfInt(char* string, int size, int id);
 

@@ -28,6 +28,7 @@ struct KernelLock {
 
 struct KernelCondition{
     Condition* condition;
+    Lock* conditionLock;
     AddrSpace *owner;
     bool isToBeDeleted;
     int waitingThreads;

@@ -108,38 +108,45 @@ Lock::Lock(char* debugName) {
 Lock::~Lock() {
     delete queue;
 }
-void Lock::Acquire() {
+int Lock::Acquire() {
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     if(isHeldByCurrentThread()){
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return 0;
     }
     if (owner == NULL) {
         owner = currentThread;
+        (void) interrupt->SetLevel(oldLevel);
+        return 0;
     }
     else{
         queue->Append((void *)currentThread);
         currentThread->Sleep();
+        (void) interrupt->SetLevel(oldLevel);
+        return 1;
     }
-    (void) interrupt->SetLevel(oldLevel);
+    
 }
-void Lock::Release() {
+int Lock::Release() {
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     if(currentThread != owner){
         printf("%s\n", "Current thread not owner can't release lock");
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }
     if(!queue->IsEmpty()) {
         Thread *thread;
         thread = (Thread *)queue->Remove();
         owner = thread;
         scheduler->ReadyToRun(thread);
+        (void) interrupt->SetLevel(oldLevel);
+        return 1;
     }
     else{
         owner = NULL;
+        return 0;
     }
-    (void) interrupt->SetLevel(oldLevel);
+    
 }
 bool Lock::isHeldByCurrentThread() {
    return (currentThread==owner);
@@ -157,17 +164,17 @@ Condition::Condition(char* debugName) {
 Condition::~Condition() { 
     delete queue;
 }
-void Condition::Wait(Lock* conditionLock) {
+int Condition::Wait(Lock* conditionLock) {
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     if(conditionLock == NULL) {
         printf("%s\n", "Lock is set to null");
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }
     if(!conditionLock->isHeldByCurrentThread()) {
         printf("%s\n", "Current thread does not hold the lock");
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }
     if(waitingLock == NULL) {
         waitingLock = conditionLock;
@@ -175,34 +182,35 @@ void Condition::Wait(Lock* conditionLock) {
     else if(conditionLock != waitingLock) {
         printf("Condition Lock %s does not match Waiting Lock %s.\n", conditionLock->getName(), waitingLock->getName());
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }
     queue->Append(currentThread);
     conditionLock->Release();
     currentThread->Sleep();
     conditionLock->Acquire();
     (void) interrupt->SetLevel(oldLevel);
+    return 1;
 }
-void Condition::Signal(Lock* conditionLock) { 
+int Condition::Signal(Lock* conditionLock) { 
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     if(conditionLock == NULL) {
         printf("%s\n", "Lock is set to null");
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }
     if(!conditionLock->isHeldByCurrentThread()) {
         printf("%s\n", "Current thread does not hold the lock");
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }  
     if(queue->IsEmpty()) {
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return 0;
     }  
     if(conditionLock != waitingLock) {
         printf("Condition Lock %s does not match Waiting Lock %s.\n", conditionLock->getName(), waitingLock->getName());
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }
     Thread *thread;
     thread = (Thread *)queue->Remove();
@@ -211,27 +219,31 @@ void Condition::Signal(Lock* conditionLock) {
         waitingLock = NULL;
     }
     (void) interrupt->SetLevel(oldLevel);
+    return 1;
 }
-void Condition::Broadcast(Lock* conditionLock) {
+int Condition::Broadcast(Lock* conditionLock) {
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     if(conditionLock == NULL) {
         printf("%s\n", "Lock is set to null");
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }
     if(!conditionLock->isHeldByCurrentThread()) {
         printf("%s\n", "Current thread does not hold the lock");
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }  
     if(conditionLock != waitingLock) {
         printf("Condition Lock %s does not match Waiting Lock.\n", conditionLock->getName());
         (void) interrupt->SetLevel(oldLevel);
-        return;
+        return -1;
     }
+    int i = 0;
     while(!queue->IsEmpty()) {
         Signal(conditionLock);
+        i++;
     }
     (void) interrupt->SetLevel(oldLevel);
+    return i;
 }
 

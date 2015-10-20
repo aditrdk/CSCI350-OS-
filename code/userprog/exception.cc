@@ -235,29 +235,6 @@ void Yield_Syscall() {
   currentThread->Yield();
 }
 
-void Exit_Syscall(int status) {
-  KernelProcess *kp;
-  kp = (KernelProcess*)processTable.Get(currentThread->space->tableIndex);
-  processTableLock->Acquire();
-  kp->numThreads--;
-  kp->numRunningThreads--;
-  if(kp->numRunningThreads == 0) {
-    printf("ending process");
-      numProcesses--;
-      processTable.Remove(currentThread->space->tableIndex);
-      delete currentThread->space;
-      processTableLock->Release();
-        if(numProcesses == 0) {
-          interrupt->Halt();
-      }
-  }
-  else{   //Thread called exit but is not the last exitting thread in the process
-    currentThread->space->DeallocateStack(currentThread->stackId);
-    processTableLock->Release();
-  }
-  currentThread->Finish();
-}
-
 int CreateLock_Syscall(unsigned int vaddr, int len) {
     // Create the file with the name in the user buffer pointed to by
     // vaddr.  The file name is at most MAXFILENAME chars long.  No
@@ -301,11 +278,13 @@ void DestroyLock_Syscall(int index){
 	//Check that the lock is assigned in the bitmap
 	if(!lockMap.Test(index)){
 		printf("Trying to destroy a lock that is not assigned to any process. %d\n", index);
+    lockTableLock->Release();
 		return;
 	}
 	//Check lock is of this process
 	if(lockTable[index].owner != currentThread->space){
 		printf("Trying to destroy lock. Current process is not owner of lock %d\n", index);
+    lockTableLock->Release();
 		return;
 	}
 
@@ -325,65 +304,157 @@ void DestroyLock_Syscall(int index){
 
 }
 
-int Acquire_Syscall(int index){
+void DestroyCondition_Syscall(int index){
+    //Check condition index is a valid number
+  if(index < 0 || index >= numConditions){
+    printf("Trying to destroy invalid condition index %d\n", index);
+    return;
+  }
 
+  lockTableLock->Acquire();
+  //Check that the condition is assigned in the bitmap
+  if(!conditionMap.Test(index)){
+    printf("Trying to destroy a condition that is not assigned to any process. %d\n", index);
+    lockTableLock->Release();
+    return;
+  }
+  //Check condition is of this process
+  if(conditionTable[index].owner != currentThread->space){
+    printf("Trying to destroy condition. Current process is not owner of condition %d\n", index);
+    lockTableLock->Release();
+    return;
+  }
+
+  // if condition has owner, mark it to be deleted
+  // condition is not being held, remove it
+  if(conditionTable[index].waitingThreads > 0){
+    conditionTable[index].isToBeDeleted = true;
+  }else{ 
+    delete conditionTable[index].condition;
+    conditionTable[index].condition = NULL;
+    conditionTable[index].owner = NULL;
+    conditionTable[index].isToBeDeleted = false;
+    conditionMap.Clear(index);
+  }
+
+  lockTableLock->Release();
+}
+
+void Exit_Syscall(int status) {
+  KernelProcess *kp;
+  kp = (KernelProcess*)processTable.Get(currentThread->space->tableIndex);
+  processTableLock->Acquire();
+  kp->numThreads--;
+  kp->numRunningThreads--;
+  if(kp->numRunningThreads == 0) {
+    printf("ending process");
+    numProcesses--;
+    for(int i = 0; i < numLocks; i++) {
+      if(lockMap.Test(i)) {
+        if(lockTable[i].owner == currentThread->space) {
+          DestroyLock_Syscall(i);
+        }
+      }
+    }
+    for(int i= 0; i < numConditions; i++) {
+      if(conditionMap.Test(i)) {
+        if(conditionTable[i].owner == currentThread->space) {
+          DestroyCondition_Syscall(i);
+        }
+      }
+    }
+    processTable.Remove(currentThread->space->tableIndex);
+    delete currentThread->space;
+    processTableLock->Release();
+      if(numProcesses == 0) {
+          interrupt->Halt();
+      }
+  }
+  else{   //Thread called exit but is not the last exitting thread in the process
+    currentThread->space->DeallocateStack(currentThread->stackId);
+    processTableLock->Release();
+  }
+  currentThread->Finish();
+}
+
+int Acquire_Syscall(int index){
+  IntStatus oldLevel = interrupt->SetLevel(IntOff);
 	lockTableLock->Acquire();
+  DEBUG('a', "Acquired lock table lock.\n");
 	if(index < 0 || index >= numLocks){
 		printf("Trying to acquire invalid lock index %d\n", index);
+    (void) interrupt->SetLevel(oldLevel);
+    lockTableLock->Release();
 		return -1;
 	}
 
 	if(!lockMap.Test(index)){
 		printf("Trying to acquire a lock that is not currently assigned to a process. %d\n", index);
+    (void) interrupt->SetLevel(oldLevel);
+    lockTableLock->Release();
 		return -1;
 	}
 
 	//Check lock is of this process
 	if(lockTable[index].owner != currentThread->space){
 		printf("Cannot acquire lock. Current process is not owner of lock %d\n", index);
+    (void) interrupt->SetLevel(oldLevel);
+    lockTableLock->Release();
 		return -1;
 	}
 
 	if(lockTable[index].isToBeDeleted){
 		printf("Cannot acquire lock. Lock is marked to be deleted %d\n", index);
+    (void) interrupt->SetLevel(oldLevel);
+    lockTableLock->Release();
 		return -1;
 	}
 	lockTable[index].waitingThreads ++;
 	lockTableLock->Release();
 	//Might get context switched here
-	lockTable[index].lock->Acquire();
+  
+  ((KernelProcess*)processTable.Get(currentThread->space->tableIndex))->numRunningThreads--;
+	int result = lockTable[index].lock->Acquire();
+  //Lock Acquire returns 0 if the thread did not go to sleep and 1 if it did go to sleep
+  if(result == 0) {
+    ((KernelProcess*)processTable.Get(currentThread->space->tableIndex))->numRunningThreads++;
+  }  
+
 
 	lockTableLock->Acquire();
 	lockTable[index].waitingThreads --;
 	lockTableLock->Release();
-
+  (void) interrupt->SetLevel(oldLevel);
 	return index;
 }
 
 void Release_Syscall(int index){
-	lockTableLock->Acquire();
-
+  lockTableLock->Acquire();
 	if(index < 0 || index >= numLocks){
 		printf("Trying to release invalid lock index %d\n", index);
+    lockTableLock->Release();
 		return;
 	}
 
 	if(!lockMap.Test(index)){
 		printf("Trying to release a lock that is not currently assigned to a process. %d\n", index);
+    lockTableLock->Release();
 		return;
 	}
 
 	//Check lock is of this process
 	if(lockTable[index].owner != currentThread->space){
 		printf("Cannot release lock. Current process is not owner of lock %d\n", index);
+    lockTableLock->Release();
 		return;
 	}
 
 	if(!lockTable[index].lock->isHeldByCurrentThread()){
 		printf("Cannot release lock. Current thread is not holding the lock %d\n", index);
+    lockTableLock->Release();
 		return;
 	}
-	lockTable[index].lock->Release();
+	int result = lockTable[index].lock->Release();
 	if(lockTable[index].isToBeDeleted && lockTable[index].waitingThreads == 0){
 		//Delete lock
 		delete lockTable[index].lock;
@@ -395,22 +466,227 @@ void Release_Syscall(int index){
 
 	lockTableLock->Release();
 
+  if(result == 1){
+    processTableLock->Acquire();
+    ((KernelProcess*)processTable.Get(currentThread->space->tableIndex))->numRunningThreads++;
+    processTableLock->Release();
+  }
 }
 
 int CreateCondition_Syscall(unsigned int vaddr, int len){
-	return -1;
+     // Create the file with the name in the user buffer pointed to by
+    // vaddr.  The file name is at most MAXFILENAME chars long.  No
+    // way to return errors, though...
+    char *buf = new char[len+1];  // Kernel buffer to put the name in
+
+    if (!buf) return -1;
+
+    if( copyin(vaddr,len,buf) == -1 ) {
+  printf("%s","Bad pointer passed to CreateCondition\n");
+  delete buf;
+  return -1;
+    }
+
+    buf[len]='\0';
+    lockTableLock->Acquire();
+    int index = conditionMap.Find();
+    if(index != -1) {
+      conditionTable[index].condition = new Condition(buf);
+      conditionTable[index].owner = currentThread->space;
+      conditionTable[index].isToBeDeleted = false;
+      conditionTable[index].waitingThreads = 0;
+    }
+    else {
+      printf("No empty locks in lockTable\n");
+    }
+    lockTableLock->Release();
+    delete buf;
+    return index;
 }
 
-void DestroyCondition_Syscall(int index){
+int Wait_Syscall(int index, int lock){
+  DEBUG('a', "Entering wait syscall.\n");
+  IntStatus oldLevel = interrupt->SetLevel(IntOff);
+  
+  DEBUG('a', "Acquired lockTableLock.\n");
+  if(index < 0 || index >= numConditions){
+    printf("Trying to wait for an invalid condition index %d\n", index);
+    (void) interrupt->SetLevel(oldLevel);
+    return -1;
+  }
+
+  if(lock < 0 || lock >= numLocks){
+    printf("Trying to wait for invalid condition lock %d\n", lock);
+    (void) interrupt->SetLevel(oldLevel);
+    return -1;
+  }
+
+  if(!lockMap.Test(lock)){
+    printf("Trying to wait for a condition with a lock that is not currently assigned to a process. %d\n", lock);
+    (void) interrupt->SetLevel(oldLevel);
+    return -1;
+  }
+
+  if(!conditionMap.Test(index)){
+    printf("Trying to wait for a condition that is not currently assigned to a process. %d\n", index);
+    (void) interrupt->SetLevel(oldLevel);
+    return -1;
+  }
+
+  //Check condition is of this process
+  if(conditionTable[index].owner != currentThread->space){
+    printf("Cannot wait for a condition. Current process is not owner of condition %d\n", index);
+    (void) interrupt->SetLevel(oldLevel);
+    return -1;
+  }
+
+  if(lockTable[lock].owner != currentThread->space){
+    printf("Cannot wait for a condition. Current process is not owner of lock %d\n", index);
+    (void) interrupt->SetLevel(oldLevel);
+    return -1;
+  }
+
+  if(conditionTable[index].isToBeDeleted){
+    printf("Cannot wait for a condition. Condition is marked to be deleted %d\n", index);
+    (void) interrupt->SetLevel(oldLevel);
+    return -1;
+  }
+  conditionTable[index].waitingThreads ++;
+  //lockTableLock->Release();
+  //Might get context switched here
+  
+  ((KernelProcess*)processTable.Get(currentThread->space->tableIndex))->numRunningThreads--;
+  DEBUG('a', "Actually got to condition wait.\n");
+  int result = conditionTable[index].condition->Wait(lockTable[lock].lock);
+  if(result != 1){
+    ((KernelProcess*)processTable.Get(currentThread->space->tableIndex))->numRunningThreads++;
+  }
+  
+
+
+  lockTableLock->Acquire();
+  conditionTable[index].waitingThreads --;
+  lockTableLock->Release();
+  (void) interrupt->SetLevel(oldLevel);
+  return index;
 }
 
-void Wait_Syscall(int index){
+void Signal_Syscall(int index, int lock){
+  lockTableLock->Acquire();
+  if(lock < 0 || lock >= numLocks){
+    printf("Trying to wait for invalid condition lock %d\n", lock);
+    lockTableLock->Release();
+    return;
+  }
+
+  if(!lockMap.Test(lock)){
+    printf("Trying to wait for a condition with a lock that is not currently assigned to a process. %d\n", lock);
+    lockTableLock->Release();
+    return;
+  }
+
+  if(lockTable[lock].owner != currentThread->space){
+    printf("Cannot wait for a condition. Current process is not owner of lock %d\n", index);
+    lockTableLock->Release();
+    return;
+  }
+
+  if(index < 0 || index >= numConditions){
+    printf("Trying to signal an invalid condition index %d\n", index);
+    lockTableLock->Release();
+    return;
+  }
+
+  if(!conditionMap.Test(index)){
+    printf("Trying to wait for a condition that is not currently assigned to a process. %d\n", index);
+    lockTableLock->Release();
+    return;
+  }
+
+  if(conditionTable[index].owner != currentThread->space){
+    printf("Cannot wait for a condition. Current process is not owner of condition %d\n", index);
+    lockTableLock->Release();
+    return;
+  }
+
+  if(conditionTable[index].isToBeDeleted){
+    printf("Cannot wait for a condition. Condition is marked to be deleted %d\n", index);
+    lockTableLock->Release();
+    return;
+  }
+
+  int result = conditionTable[index].condition->Signal(lockTable[lock].lock);
+
+  if(conditionTable[index].isToBeDeleted && conditionTable[index].waitingThreads == 0){
+    //Delete condition
+    delete conditionTable[index].condition;
+    conditionTable[index].condition = NULL;
+    conditionTable[index].owner = NULL;
+    conditionTable[index].isToBeDeleted = false;
+    conditionMap.Clear(index);
+  }
+  lockTableLock->Release();
+
+  if(result == 1){
+    processTableLock->Acquire();
+    ((KernelProcess*)processTable.Get(currentThread->space->tableIndex))->numRunningThreads++;
+    processTableLock->Release();
+  }
 }
 
-void Signal_Syscall(int index){
-}
+void Broadcast_Syscall(int index, int lock){
+  lockTableLock->Acquire();
+  if(lock < 0 || lock >= numLocks){
+    printf("Trying to wait for invalid condition lock %d\n", lock);
+    return;
+  }
 
-void Broadcast_Syscall(int index){
+  if(!lockMap.Test(lock)){
+    printf("Trying to wait for a condition with a lock that is not currently assigned to a process. %d\n", lock);
+    return;
+  }
+
+  if(lockTable[lock].owner != currentThread->space){
+    printf("Cannot wait for a condition. Current process is not owner of lock %d\n", index);
+    return;
+  }
+
+  if(index < 0 || index >= numConditions){
+    printf("Trying to signal an invalid condition index %d\n", index);
+    return;
+  }
+
+  if(!conditionMap.Test(index)){
+    printf("Trying to wait for a condition that is not currently assigned to a process. %d\n", index);
+    return;
+  }
+
+  if(conditionTable[index].owner != currentThread->space){
+    printf("Cannot wait for a condition. Current process is not owner of condition %d\n", index);
+    return;
+  }
+
+  if(conditionTable[index].isToBeDeleted){
+    printf("Cannot wait for a condition. Condition is marked to be deleted %d\n", index);
+    return;
+  }
+
+  int result = conditionTable[index].condition->Broadcast(lockTable[lock].lock);
+  if(conditionTable[index].isToBeDeleted && conditionTable[index].waitingThreads == 0){
+    //Delete condition
+    delete conditionTable[index].condition;
+    conditionTable[index].condition = NULL;
+    conditionTable[index].owner = NULL;
+    conditionTable[index].isToBeDeleted = false;
+    conditionMap.Clear(index);
+  }
+  lockTableLock->Release();
+
+  if(result > 0){
+    processTableLock->Acquire();
+    ((KernelProcess*)processTable.Get(currentThread->space->tableIndex))->numRunningThreads += result;
+    processTableLock->Release();
+  }
 }
 
 void PrintfInt_Syscall(unsigned int vaddr, int len, int id){
@@ -580,15 +856,15 @@ void ExceptionHandler(ExceptionType which) {
     break;
       case SC_Wait:
     DEBUG('a', "Wait syscall.\n");
-    Wait_Syscall(machine->ReadRegister(4));
+    rv = Wait_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
     break;
       case SC_Signal:
     DEBUG('a', "Signal syscall.\n");
-    Signal_Syscall(machine->ReadRegister(4));
+    Signal_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
     break;
       case SC_Broadcast:
     DEBUG('a', "Broadcast syscall.\n");
-    Broadcast_Syscall(machine->ReadRegister(4));
+    Broadcast_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
     break;
       case SC_Fork:
     DEBUG('a', "Fork syscall.\n");
