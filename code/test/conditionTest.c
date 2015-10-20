@@ -14,7 +14,16 @@ void waitThread() {
 
 void signalThread() {
 	int i;
-	Yield();
+	int max;
+	max = Rand()%6 + 10; 
+	PrintfInt("Random number %d\n", sizeof("Random number %d\n"), max);
+	max = Rand()%6 + 10; 
+	PrintfInt("Random number %d\n", sizeof("Random number %d\n"), max);
+	max = Rand()%6 + 10; 
+	PrintfInt("Random number %d\n", sizeof("Random number %d\n"), max);
+	for(i = 0; i < max; i++) {
+		Yield();
+	}
 	Acquire(lockNum);
 	Write("Signal thread Signalling\n", sizeof("Signal thread Signalling\n"), ConsoleOutput );
 	Signal(conditionNum, lockNum);

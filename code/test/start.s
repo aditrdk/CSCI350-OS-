@@ -210,6 +210,14 @@ PrintfInt:
 	j	$31
 	.end PrintfInt
 
+	.globl Rand
+	.ent	Rand
+Rand:
+	addiu $2,$0,SC_Rand
+	syscall
+	j	$31
+	.end Rand
+
 /* dummy function to keep gcc happy */
         .globl  __main
         .ent    __main
