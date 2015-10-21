@@ -226,6 +226,14 @@ ReadInt:
 	j	$31
 	.end ReadInt
 
+	.globl PrintLargeInt
+	.ent	PrintLargeInt
+PrintLargeInt:
+	addiu $2,$0,SC_PrintLargeInt
+	syscall
+	j	$31
+	.end PrintLargeInt
+
 /* dummy function to keep gcc happy */
         .globl  __main
         .ent    __main

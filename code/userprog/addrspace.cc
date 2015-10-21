@@ -148,7 +148,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
 						// at least until we have
 						// virtual memory
 
-    DEBUG('a', "Initializing address space, num total pages %d, size %d\n", 
+    DEBUG('c', "Initializing address space, num total pages %d, size %d\n", 
        numCodePages + numStackPages, size);
 // first, set up the translation 
     pageTable = new TranslationEntry[numCodePages + numStackPages];
@@ -197,7 +197,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
 // then, copy in the code and data segments into memory
     int initPages = divRoundUp(noffH.code.size + noffH.initData.size, PageSize);
     for(int j = 0; j < initPages; j++) {
-        DEBUG('a', "Initializing code/initdata page, at 0x%x, size %d\n", 
+        DEBUG('c', "Initializing code/initdata page, at 0x%x, size %d\n", 
             pageTable[j].physicalPage * PageSize, PageSize);
         if(j == initPages -1) {
             executable->ReadAt(&(machine->mainMemory[pageTable[j].physicalPage * PageSize]),
@@ -309,7 +309,7 @@ void AddrSpace::AllocateStack(int stackID) {
             ASSERT(false);
         }
         pageTable[i].physicalPage = index;
-        pageTable[i].valid = true;
+        pageTable[i].valid = TRUE;
     }
     memoryMapLock->Release();
 }
@@ -325,6 +325,6 @@ void AddrSpace::DeallocatePage(int pageNo) {
     int index = pageTable[pageNo].physicalPage;
     memoryMap.Clear(index);
     bzero(&machine->mainMemory[index*PageSize], PageSize);
-    pageTable[pageNo].valid = false;
+    pageTable[pageNo].valid = FALSE;
     memoryMapLock->Release();
 }

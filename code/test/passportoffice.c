@@ -71,29 +71,34 @@ int userChoice;
 int numCustomersWhoHaveLeftTheOffice = 0;
 int numSenatorsWhoHaveLeftTheOffice = 0;
 int numCustomersLock;
+int customerIndex = 0;
 
 int SenatorLock;
 int SenatorWaitCondition;
 int numSenatorsPresent = 0; 
 int numCustomersOutside = 0;
+int senatorIndex = 0;
 
 int appLineLock;
 int appBreakCondition;
 Clerk appClerks[5];
 int numAppClerksAwake;
 int appClerkCash = 0; /*Bribe line money Locked by line lock*/
+int appIndex = 0;
 
 int picLineLock;
 int picBreakCondition;
 Clerk picClerks[5];
 int numPicClerksAwake;
 int picClerkCash = 0; /*Bribe line money Locked by line lock*/
+int picIndex = 0;
 
 int passLineLock;
 int passBreakCondition;
 Clerk passClerks[5];
 int numPassClerksAwake;
 int passClerkCash= 0; /*Bribe line money Locked by line lock*/
+int passIndex = 0;
 
 int cashLineLock;
 int cashBreakCondition;
@@ -101,6 +106,7 @@ Clerk cashClerks[5];
 int numCashClerksAwake;
 int cashClerkCash= 0; /*Locked by line lock and special cashCashLock*/
 int cashCashLock; /*extra lock for cashier cash variable because it is modified other than during the line bribing*/
+int cashIndex = 0;
 
 /*Passport office's internal database. */
 CustomerData customersDatabase[60];
@@ -212,7 +218,9 @@ void CustomerThread(int index) {
 	int clerkChoice;
 	/*Initialize new customer*/
 	Customer c;
-	c.ssn = index;
+	Acquire(numCustomersLock);
+	c.ssn = customerIndex++;
+	Release(numCustomersLock);
 	c.appAccepted = false;
 	c.isPicTaken = false;
 	c.appFiled = false;
@@ -229,10 +237,14 @@ void CustomerThread(int index) {
 		/*Check for senators*/
 		Acquire(SenatorLock);
 		if(numSenatorsPresent != 0){
-			PrintfInt("Customer %d is going outside the Passport Office because their is a Senator present.\n", sizeof("Customer %d is going outside the Passport Office because their is a Senator present.\n"), index);
+			PrintfInt("Customer %d is going outside the Passport Office because there is a Senator present.\n", sizeof("Customer %d is going outside the Passport Office because there is a Senator present.\n"), c.ssn);
+			Acquire(numCustomersLock);
 			numCustomersOutside++;
+			Release(numCustomersLock);
 			while(numSenatorsPresent > 0) Wait(SenatorWaitCondition, SenatorLock); /*wait for senator to leave*/
+			Acquire(numCustomersLock);
 			numCustomersOutside--;
+			Release(numCustomersLock);
 		}else{
 
 			/*Choose new clerk type RANDOMLY*/
@@ -282,14 +294,14 @@ void CustomerThread(int index) {
 			}
 			else if(!bribe && appClerks[myLine].state == busy) { /*Get in line*/
 				appClerks[myLine].numLine++;
-				PrintfInt("Customer %d has gotten in regular line for ApplicationClerk %d\n", sizeof("Customer %d has gotten in regular line for ApplicationClerk %d\n"), 1000+1000*index + myLine);
+				PrintfInt("Customer %d has gotten in regular line for ApplicationClerk %d\n", sizeof("Customer %d has gotten in regular line for ApplicationClerk %d\n"), 1000+1000*c.ssn + myLine);
 				Wait(appClerks[myLine].waitCondition, appLineLock);
 				appClerks[myLine].numLine--;
 			}
 			else if(bribe && appClerks[myLine].state == busy) { /*Get in line*/
 				appClerks[myLine].numBribeLine++;
-				PrintfInt("Customer %d has gotten in bribe line for ApplicationClerk %d\n", sizeof("Customer %d has gotten in bribe line for ApplicationClerk %d\n"), 1000+1000* index +  myLine);
-				PrintfInt("ApplicationClerk %d has received $500 from Customer %d\n", sizeof("ApplicationClerk %d has received $500 from Customer %d\n"), 1000+1000*myLine + index);
+				PrintfInt("Customer %d has gotten in bribe line for ApplicationClerk %d\n", sizeof("Customer %d has gotten in bribe line for ApplicationClerk %d\n"), 1000+1000* c.ssn +  myLine);
+				PrintfInt("ApplicationClerk %d has received $500 from Customer %d\n", sizeof("ApplicationClerk %d has received $500 from Customer %d\n"), 1000+1000*myLine + c.ssn);
 				c.cash -= 500;
 				appClerkCash += 500;
 				Wait(appClerks[myLine].bribeWaitCondition, appLineLock);
@@ -305,7 +317,7 @@ void CustomerThread(int index) {
 			}
 			Acquire(appClerks[myLine].ClerkLock);
 			appClerks[myLine].dataIn = c.ssn;
-			PrintfInt("Customer %d has given SSN %d to ApplicationClerk %d\n", sizeof("Customer %d has given SSN %d to ApplicationClerk %d\n"), 100000+100000*index + 1000+1000*c.ssn + myLine);
+			PrintfInt("Customer %d has given SSN %d to ApplicationClerk %d\n", sizeof("Customer %d has given SSN %d to ApplicationClerk %d\n"), 100000+100000*c.ssn + 1000+1000*c.ssn + myLine);
 			Signal(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 			Wait(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and file application*/
 			c.appAccepted = true;
@@ -355,14 +367,14 @@ void CustomerThread(int index) {
 			}
 			else if(!bribe && picClerks[myLine].state == busy) { /*Get in line*/
 				picClerks[myLine].numLine++;
-				PrintfInt("Customer %d has gotten in regular line for PictureClerk %d\n", sizeof("Customer %d has gotten in regular line for PictureClerk %d\n"), 1000+1000*index + myLine);
+				PrintfInt("Customer %d has gotten in regular line for PictureClerk %d\n", sizeof("Customer %d has gotten in regular line for PictureClerk %d\n"), 1000+1000*c.ssn + myLine);
 				Wait(picClerks[myLine].waitCondition, picLineLock);
 				picClerks[myLine].numLine--;
 			}
 			else if(bribe && picClerks[myLine].state == busy) { /*Get in bribe line*/
 				picClerks[myLine].numBribeLine++;
-				PrintfInt("Customer %d has gotten in bribe line for PictureClerk %d\n", sizeof("Customer %d has gotten in bribe line for PictureClerk %d\n"), 1000+1000* index + myLine);
-				PrintfInt("PictureClerk %d has received $500 from Customer %d\n", sizeof("PictureClerk %d has received $500 from Customer %d\n"), 1000+1000* myLine + index);
+				PrintfInt("Customer %d has gotten in bribe line for PictureClerk %d\n", sizeof("Customer %d has gotten in bribe line for PictureClerk %d\n"), 1000+1000* c.ssn + myLine);
+				PrintfInt("PictureClerk %d has received $500 from Customer %d\n", sizeof("PictureClerk %d has received $500 from Customer %d\n"), 1000+1000* myLine + c.ssn);
 				c.cash -= 500;
 				picClerkCash += 500;
 				Wait(picClerks[myLine].bribeWaitCondition, picLineLock);
@@ -378,15 +390,15 @@ void CustomerThread(int index) {
 			}
 			Acquire(picClerks[myLine].ClerkLock);
 			picClerks[myLine].dataIn = c.ssn;
-			PrintfInt("Customer %d has given SSN %d to PictureClerk %d\n", sizeof("Customer %d has given SSN %d to PictureClerk %d\n"), 100000+ 100000*index + 1000 + 1000*c.ssn + myLine);
+			PrintfInt("Customer %d has given SSN %d to PictureClerk %d\n", sizeof("Customer %d has given SSN %d to PictureClerk %d\n"), 100000+ 100000*c.ssn + 1000 + 1000*c.ssn + myLine);
 			Signal(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 			Wait(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and take pic*/
-			likesPic = Rand()%2;
+			likesPic = Rand()%3;
 			picClerks[myLine].dataIn = likesPic;
 			if(likesPic == 0){ /*Did not like pic*/
-				PrintfInt("Customer %d does not like their picture from PictureClerk %d\n", sizeof("Customer %d does not like their picture from PictureClerk %d\n"), 1000 + 1000* index + myLine);
+				PrintfInt("Customer %d does not like their picture from PictureClerk %d\n", sizeof("Customer %d does not like their picture from PictureClerk %d\n"), 1000 + 1000* c.ssn + myLine);
 			}else{ /*Likes Pic*/
-				PrintfInt("Customer %d does like their picture from PictureClerk %d\n", sizeof("Customer %d does like their picture from PictureClerk %d\n"), 1000 + 1000 * index + myLine);
+				PrintfInt("Customer %d does like their picture from PictureClerk %d\n", sizeof("Customer %d does like their picture from PictureClerk %d\n"), 1000 + 1000 * c.ssn + myLine);
 				c.isPicTaken = true;
 			}
 			Signal(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*signalling whether he likes picture or not*/
@@ -434,14 +446,14 @@ void CustomerThread(int index) {
 			}
 			else if(!bribe && passClerks[myLine].state == busy) { /*Get in line*/
 				passClerks[myLine].numLine++;
-				PrintfInt("Customer %d has gotten in regular line for PassportClerk %d at position %d\n", sizeof("Customer %d has gotten in regular line for PassportClerk %d at position %d\n"), 100000+100000* index + 1000 + 1000 * myLine + passClerks[myLine].numLine);
+				PrintfInt("Customer %d has gotten in regular line for PassportClerk %d at position %d\n", sizeof("Customer %d has gotten in regular line for PassportClerk %d at position %d\n"), 100000+100000* c.ssn + 1000 + 1000 * myLine + passClerks[myLine].numLine);
 				Wait(passClerks[myLine].waitCondition, passLineLock);
 				passClerks[myLine].numLine--;
 			}
 			else if(bribe && passClerks[myLine].state == busy) { /*Get in bribe line*/
 				passClerks[myLine].numBribeLine++;
-				PrintfInt("Customer %d has gotten in bribe line for PassportClerk %d at position %d\n", sizeof("Customer %d has gotten in bribe line for PassportClerk %d at position %d\n"),100000+100000* index + 1000 + 1000* myLine + passClerks[myLine].numBribeLine);
-				PrintfInt("PassportClerk %d has received $500 from Customer %d\n", sizeof("PassportClerk %d has received $500 from Customer %d\n"), 1000+ 1000* myLine + index);
+				PrintfInt("Customer %d has gotten in bribe line for PassportClerk %d at position %d\n", sizeof("Customer %d has gotten in bribe line for PassportClerk %d at position %d\n"),100000+100000* c.ssn + 1000 + 1000* myLine + passClerks[myLine].numBribeLine);
+				PrintfInt("PassportClerk %d has received $500 from Customer %d\n", sizeof("PassportClerk %d has received $500 from Customer %d\n"), 1000+ 1000* myLine + c.ssn);
 				c.cash -= 500;
 				passClerkCash += 500;
 				Wait(passClerks[myLine].bribeWaitCondition, passLineLock);
@@ -457,13 +469,13 @@ void CustomerThread(int index) {
 			}
 			Acquire(passClerks[myLine].ClerkLock);
 			passClerks[myLine].dataIn = c.ssn;
-			PrintfInt("Customer %d has given SSN %d to PassportClerk %d\n", sizeof("Customer %d has given SSN %d to PassportClerk %d\n"), 100000+100000* index + 1000 + 1000* c.ssn + myLine);
+			PrintfInt("Customer %d has given SSN %d to PassportClerk %d\n", sizeof("Customer %d has given SSN %d to PassportClerk %d\n"), 100000+100000* c.ssn + 1000 + 1000* c.ssn + myLine);
 			Signal(passClerks[myLine].ClerkCV, passClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 			Wait(passClerks[myLine].ClerkCV, passClerks[myLine].ClerkLock);
 			if(!(c.appAccepted && c.isPicTaken)) {
 				int waitTime = Rand()%901 + 100;
 				int i;
-				PrintfInt("Customer %d has gone to PassportClerk %d too soon. They are going to the back of the line.\n", sizeof("Customer %d has gone to PassportClerk %d too soon. They are going to the back of the line.\n"), 1000+1000* index + myLine);
+				PrintfInt("Customer %d has gone to PassportClerk %d too soon. They are going to the back of the line.\n", sizeof("Customer %d has gone to PassportClerk %d too soon. They are going to the back of the line.\n"), 1000+1000* c.ssn + myLine);
 				Release(passClerks[myLine].ClerkLock);
 				for(i = 0; i < waitTime; i++) {
 					Yield();
@@ -514,14 +526,14 @@ void CustomerThread(int index) {
 			}
 			else if(!bribe && cashClerks[myLine].state == busy) { /*Get in line*/
 				cashClerks[myLine].numLine++;
-				PrintfInt("Customer %d has gotten in regular line for Cashier %d at position %d\n", sizeof("Customer %d has gotten in regular line for Cashier %d at position %d\n"), 100000+100000* index + 1000 + 1000* myLine + cashClerks[myLine].numLine);
+				PrintfInt("Customer %d has gotten in regular line for Cashier %d at position %d\n", sizeof("Customer %d has gotten in regular line for Cashier %d at position %d\n"), 100000+100000* c.ssn + 1000 + 1000* myLine + cashClerks[myLine].numLine);
 				Wait(cashClerks[myLine].waitCondition, cashLineLock);
 				cashClerks[myLine].numLine--;
 			}
 			else if(bribe && cashClerks[myLine].state == busy) { /*Get in bribe line*/
 				cashClerks[myLine].numBribeLine++;
-				PrintfInt("Customer %d has gotten in bribe line for Cashier %d at position %d\n", sizeof("Customer %d has gotten in bribe line for Cashier %d at position %d\n"),100000+100000* index + 1000+1000* myLine + cashClerks[myLine].numBribeLine);
-				PrintfInt("Cashier %d has received $500 from Customer %d\n", sizeof("Cashier %d has received $500 from Customer %d\n"), 1000+1000* myLine + index);
+				PrintfInt("Customer %d has gotten in bribe line for Cashier %d at position %d\n", sizeof("Customer %d has gotten in bribe line for Cashier %d at position %d\n"),100000+100000* c.ssn + 1000+1000* myLine + cashClerks[myLine].numBribeLine);
+				PrintfInt("Cashier %d has received $500 from Customer %d\n", sizeof("Cashier %d has received $500 from Customer %d\n"), 1000+1000* myLine + c.ssn);
 				c.cash -= 500;
 				Acquire(cashCashLock);
 				cashClerkCash += 500;
@@ -539,18 +551,18 @@ void CustomerThread(int index) {
 			/*Check if they were taken out of line because of a senator*/
 			Acquire(cashClerks[myLine].ClerkLock);
 			cashClerks[myLine].dataIn = c.ssn;
-			PrintfInt("Customer %d has given SSN %d to Cashier %d\n", sizeof("Customer %d has given SSN %d to Cashier %d\n"), 100000+100000* index + 1000 + 1000* c.ssn + myLine);
+			PrintfInt("Customer %d has given SSN %d to Cashier %d\n", sizeof("Customer %d has given SSN %d to Cashier %d\n"), 100000+100000* c.ssn + 1000 + 1000* c.ssn + myLine);
 			if(!c.hasPaidCashier) {		/*pay now if they havent paid yet*/
 				c.cash -= 100;
 				c.hasPaidCashier = true;
-				PrintfInt("Customer %d has given Cashier %d 100$.\n", sizeof("Customer %d has given Cashier %d 100$.\n"), 1000 + 1000* index + myLine);
+				PrintfInt("Customer %d has given Cashier %d 100$.\n", sizeof("Customer %d has given Cashier %d 100$.\n"), 1000 + 1000* c.ssn + myLine);
 			}
 			Signal(cashClerks[myLine].ClerkCV, cashClerks[myLine].ClerkLock); /*Signal that ssn and money has been given*/			
 			Wait(cashClerks[myLine].ClerkCV, cashClerks[myLine].ClerkLock);
 			if(!(c.appAccepted && c.isPicTaken && c.appFiled)) {
 				int waitTime = Rand()%901 + 100;
 				int i;
-				PrintfInt("Customer %d has gone to Cashier %d too soon. They are going to the back of the line.\n", sizeof("Customer %d has gone to Cashier %d too soon. They are going to the back of the line.\n"), 1000 + 1000*index + myLine);
+				PrintfInt("Customer %d has gone to Cashier %d too soon. They are going to the back of the line.\n", sizeof("Customer %d has gone to Cashier %d too soon. They are going to the back of the line.\n"), 1000 + 1000*c.ssn + myLine);
 				Release(cashClerks[myLine].ClerkLock);
 				for(i = 0; i < waitTime; i++) {
 					Yield();
@@ -561,7 +573,7 @@ void CustomerThread(int index) {
 				Acquire(numCustomersLock);
 				numCustomersWhoHaveLeftTheOffice++;
 				Release(numCustomersLock);
-				PrintfInt("Customer %d is leaving the Passport Office.\n", sizeof("Customer %d is leaving the Passport Office.\n"),  index);			/*They can now leave the office and end their thread*/
+				PrintfInt("Customer %d is leaving the Passport Office.\n", sizeof("Customer %d is leaving the Passport Office.\n"),  c.ssn);			/*They can now leave the office and end their thread*/
 				Release(cashClerks[myLine].ClerkLock);
 			}
 		}
@@ -574,9 +586,12 @@ void SenatorThread(int index){
 	/*Wait random time before entering office*/
 	int waitTime;
 	int i;
-	int myLine, likesPic;
+	int myLine;
 	Customer s;
-	s.ssn = index + numCustomers;
+	Acquire(SenatorLock);
+	s.ssn = senatorIndex + numCustomers;
+	senatorIndex++;
+	Release(SenatorLock);
 	s.appAccepted = false;
 	s.isPicTaken = false;
 	s.appFiled = false;
@@ -619,6 +634,7 @@ void SenatorThread(int index){
 	Release(cashLineLock);
 
 	/*Actively checking until all customers have left*/
+
 	while(numCustomersOutside < numCustomers - numCustomersWhoHaveLeftTheOffice) {
 		Release(SenatorLock);
 		Yield();	
@@ -631,7 +647,7 @@ void SenatorThread(int index){
 	for(i = 0; i < numAppClerks; i++) {
 		if(appClerks[i].state == available) {
 			myLine = i;
-			PrintfInt("Senator %d has gotten in regular line for ApplicationClerk %d\n", sizeof("Senator %d has gotten in regular line for ApplicationClerk %d\n"), 1000+1000* index + myLine);
+			PrintfInt("Senator %d has gotten in regular line for ApplicationClerk %d\n", sizeof("Senator %d has gotten in regular line for ApplicationClerk %d\n"), 1000+1000* s.ssn + myLine);
 			break;
 		}
 	}
@@ -640,7 +656,7 @@ void SenatorThread(int index){
 
 	Acquire(appClerks[myLine].ClerkLock);
 	appClerks[myLine].dataIn = s.ssn;
-	PrintfInt("Senator %d has given SSN %d to ApplicationClerk %d\n", sizeof("Senator %d has given SSN %d to ApplicationClerk %d\n"), 100000 + 100000 * index + 1000 + 1000* s.ssn + myLine);
+	PrintfInt("Senator %d has given SSN %d to ApplicationClerk %d\n", sizeof("Senator %d has given SSN %d to ApplicationClerk %d\n"), 100000 + 100000 * s.ssn + 1000 + 1000* s.ssn + myLine);
 	Signal(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 	Wait(appClerks[myLine].ClerkCV, appClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and file application*/
 	s.appAccepted = true;
@@ -649,12 +665,13 @@ void SenatorThread(int index){
 
 	/*Picture Clerk*/
 	while(!s.isPicTaken) {
+		int likesPic;
 		Acquire(picLineLock);
 		myLine = -1;
 		for(i = 0; i < numPicClerks; i++) {
 			if(picClerks[i].state == available) {
 				myLine = i;
-				PrintfInt("Senator %d has gotten in regular line for PictureClerk %d\n", sizeof("Senator %d has gotten in regular line for PictureClerk %d\n"), 1000+1000* index + myLine);
+				PrintfInt("Senator %d has gotten in regular line for PictureClerk %d\n", sizeof("Senator %d has gotten in regular line for PictureClerk %d\n"), 1000+1000* s.ssn + myLine);
 				break;
 			}
 		}
@@ -667,15 +684,15 @@ void SenatorThread(int index){
 		Release(picLineLock);
 		Acquire(picClerks[myLine].ClerkLock);
 		picClerks[myLine].dataIn = s.ssn;
-		PrintfInt("Senator %d has given SSN %d to PictureClerk %d\n", sizeof("Senator %d has given SSN %d to PictureClerk %d\n"), 100000+100000* index + 1000 + 1000* s.ssn + myLine);
+		PrintfInt("Senator %d has given SSN %d to PictureClerk %d\n", sizeof("Senator %d has given SSN %d to PictureClerk %d\n"), 100000+100000* s.ssn + 1000 + 1000* s.ssn + myLine);
 		Signal(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 		Wait(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and take pic*/
-		likesPic = Rand()%2;
+		likesPic = Rand()%4;
 		picClerks[myLine].dataIn = likesPic;
 		if(likesPic == 0){ /*Did not like pic*/
-			PrintfInt("Senator %d does not like their picture from PictureClerk %d\n", sizeof("Senator %d does not like their picture from PictureClerk %d\n"), 1000+1000* index + myLine);
+			PrintfInt("Senator %d does not like their picture from PictureClerk %d\n", sizeof("Senator %d does not like their picture from PictureClerk %d\n"), 1000+1000* s.ssn + myLine);
 		}else{ /*Likes Pic*/
-			PrintfInt("Senator %d does like their picture from PictureClerk %d\n", sizeof("Senator %d does like their picture from PictureClerk %d\n"), 1000+ 1000* index + myLine);
+			PrintfInt("Senator %d does like their picture from PictureClerk %d\n", sizeof("Senator %d does like their picture from PictureClerk %d\n"), 1000+ 1000* s.ssn + myLine);
 			s.isPicTaken = true;
 		}
 		Signal(picClerks[myLine].ClerkCV, picClerks[myLine].ClerkLock); /*signalling whether he likes picture or not*/
@@ -690,7 +707,7 @@ void SenatorThread(int index){
 		for( i = 0; i < numPassClerks; i++) {
 			if(passClerks[i].state == available) {
 				myLine = i;
-				PrintfInt("Senator %d has gotten in regular line for PassportClerk %d\n", sizeof("Senator %d has gotten in regular line for PassportClerk %d\n"), 1000+1000* index + myLine);
+				PrintfInt("Senator %d has gotten in regular line for PassportClerk %d\n", sizeof("Senator %d has gotten in regular line for PassportClerk %d\n"), 1000+1000* s.ssn + myLine);
 				break;
 			}
 		}
@@ -704,7 +721,7 @@ void SenatorThread(int index){
 
 		Acquire(passClerks[myLine].ClerkLock);
 		passClerks[myLine].dataIn = s.ssn;
-		PrintfInt("Senator %d has given SSN %d to PassportClerk %d\n", sizeof("Senator %d has given SSN %d to PassportClerk %d\n"), 100000 + 100000* index + 1000 + 1000* s.ssn + myLine);
+		PrintfInt("Senator %d has given SSN %d to PassportClerk %d\n", sizeof("Senator %d has given SSN %d to PassportClerk %d\n"), 100000 + 100000* s.ssn + 1000 + 1000* s.ssn + myLine);
 		Signal(passClerks[myLine].ClerkCV, passClerks[myLine].ClerkLock); /*Signal that ssn has been given*/
 		Wait(passClerks[myLine].ClerkCV, passClerks[myLine].ClerkLock); /*Waiting for clerk to take SSN and file application*/
 		s.appFiled = true;
@@ -719,7 +736,7 @@ void SenatorThread(int index){
 		for(i = 0; i < numCashClerks; i++) {
 			if(cashClerks[i].state == available) {
 				myLine = i;
-				PrintfInt("Senator %d has gotten in regular line for Cashier %d\n", sizeof("Senator %d has gotten in regular line for Cashier %d\n"), 1000+1000* index + myLine);
+				PrintfInt("Senator %d has gotten in regular line for Cashier %d\n", sizeof("Senator %d has gotten in regular line for Cashier %d\n"), 1000+1000* s.ssn + myLine);
 				break;
 			}
 		}
@@ -732,22 +749,22 @@ void SenatorThread(int index){
 		Release(cashLineLock);
 		Acquire(cashClerks[myLine].ClerkLock);
 		cashClerks[myLine].dataIn = s.ssn;
-		PrintfInt("Senator %d has given SSN %d to Cashier %d\n", sizeof("Senator %d has given SSN %d to Cashier %d\n"), 100000 + 100000* index + 1000 + 1000 * s.ssn + myLine);
+		PrintfInt("Senator %d has given SSN %d to Cashier %d\n", sizeof("Senator %d has given SSN %d to Cashier %d\n"), 100000 + 100000* s.ssn + 1000 + 1000 * s.ssn + myLine);
 		if(!s.hasPaidCashier) {			/*pay now if they havent paid yet  */
 			s.cash -= 100;
 			s.hasPaidCashier = true;
-			PrintfInt("Senator %d has given Cashier %d 100$.\n", sizeof("Senator %d has given Cashier %d 100$.\n"), 1000 + 1000*index + myLine);
+			PrintfInt("Senator %d has given Cashier %d 100$.\n", sizeof("Senator %d has given Cashier %d 100$.\n"), 1000 + 1000*s.ssn + myLine);
 		}
 		Signal(cashClerks[myLine].ClerkCV, cashClerks[myLine].ClerkLock); /*Signal that ssn and money has been given		*/	
 		Wait(cashClerks[myLine].ClerkCV, cashClerks[myLine].ClerkLock); /* Wait to receive passport (they will always go in the right )*/
 		if(!(s.appAccepted && s.isPicTaken && s.appFiled)) {
-			PrintfInt("ERROR Senator %d has gone to cashier %d before other clerks, this shouldn't be possible.", sizeof("ERROR Senator %d has gone to cashier %d before other clerks, this shouldn't be possible."), 1000 + 1000*index + myLine);
+			PrintfInt("ERROR Senator %d has gone to cashier %d before other clerks, this shouldn't be possible.", sizeof("ERROR Senator %d has gone to cashier %d before other clerks, this shouldn't be possible."), 1000 + 1000*s.ssn + myLine);
 		}
 		s.hasPassport = true;
 		Release(cashClerks[myLine].ClerkLock);
 	}
 	numSenatorsPresent--;
-	PrintfInt("Senator %d is leaving the Passport Office.\n", sizeof("Senator %d is leaving the Passport Office.\n"), index);
+	PrintfInt("Senator %d is leaving the Passport Office.\n", sizeof("Senator %d is leaving the Passport Office.\n"), s.ssn);
 	Broadcast(SenatorWaitCondition, SenatorLock); /*Let customers (and potentially other senator) know that he has left so they can enter*/
 	Release(SenatorLock);
 	Acquire(numCustomersLock);
@@ -757,18 +774,26 @@ void SenatorThread(int index){
 }
 
 /*Application Clerk thread*/
-void AppClerkThread(int index) {
+void AppClerkThread() {
 	char *name;
 	int waitTime;
 	int i;
-	Clerk* ac = &appClerks[index];
+	Clerk* ac;
+	int index;
+	Acquire(appLineLock);
+	index = appIndex;
+	ac = &appClerks[appIndex++];
+	Release(appLineLock);
 	
 	while(true){
 
 		/*End of simulation condition*/
+		Acquire(numCustomersLock);
 		if(numCustomersWhoHaveLeftTheOffice + numSenatorsWhoHaveLeftTheOffice == numCustomers + numSenators) {
+			Release(numCustomersLock);
 			break;
 		}
+		Release(numCustomersLock);
 		Acquire(appLineLock);
 		if(ac->numBribeLine > 0){
 			PrintfInt("ApplicationClerk %d has signalled a customer to come to their counter\n", sizeof("ApplicationClerk %d has signalled a customer to come to their counter\n"), index);
@@ -812,17 +837,26 @@ void AppClerkThread(int index) {
 }
 
 /*Picture clerk thread*/
-void PicClerkThread(int index){
+void PicClerkThread(){
 	char* name;
 	int waitTime;
 	int customerID;
 	int i;
-	Clerk* pc = &picClerks[index];
+	int index;
+	Clerk* pc;
+	Acquire(picLineLock);
+	index = picIndex;
+	pc = &picClerks[picIndex++];
+	Release(picLineLock);
+
 	while(true){
 		/*End of simulation condition*/
+		Acquire(numCustomersLock);
 		if(numCustomersWhoHaveLeftTheOffice + numSenatorsWhoHaveLeftTheOffice == numCustomers + numSenators) {
+			Release(numCustomersLock);
 			break;
 		}
+		Release(numCustomersLock);
 		Acquire(picLineLock);
 		if(pc->numBribeLine > 0){
 			PrintfInt("PictureClerk %d has signalled a customer to come to their counter\n", sizeof("PictureClerk %d has signalled a customer to come to their counter\n"), index);
@@ -878,19 +912,26 @@ void PicClerkThread(int index){
 }
 
 /*Passport Clerk Thread*/
-void PassClerkThread(int index) {
+void PassClerkThread() {
 	char* name;
 	int waitTime;
 	int customerID;
 	int i;
-	Clerk* ptc = &passClerks[index];
-
+	int index;
+	Clerk* ptc;
+	Acquire(passLineLock);
+	index = passIndex;
+	ptc = &passClerks[passIndex++];
+	Release(passLineLock);
 	while(true) {
 		
 		/*End of simulation condition*/
+		Acquire(numCustomersLock);
 		if(numCustomersWhoHaveLeftTheOffice + numSenatorsWhoHaveLeftTheOffice == numCustomers + numSenators) {
+			Release(numCustomersLock);
 			break;
 		}
+		Release(numCustomersLock);
 		Acquire(passLineLock);
 		if(ptc->numBribeLine > 0){
 			PrintfInt("PassportClerk %d has signalled a customer to come to their counter\n", sizeof("PassportClerk %d has signalled a customer to come to their counter\n"), index);
@@ -939,19 +980,26 @@ void PassClerkThread(int index) {
 }
 
 /*Cashier Thread*/
-void CashClerkThread(int index) {
+void CashClerkThread() {
 	char* name;
 	int waitTime;
 	int i;
 	int customerID;
-	Clerk* cc = &cashClerks[index];
-
+	int index;
+	Clerk* cc;
+	Acquire(cashLineLock);
+	index = cashIndex;
+	cc = &cashClerks[cashIndex++];
+	Release(cashLineLock);
 	while(true) {
 		
 		/*End of simulation condition*/
-		if(numCustomersWhoHaveLeftTheOffice + numSenatorsWhoHaveLeftTheOffice == numCustomers + numSenators) {	/*If all customers have got their passports then end the thread*/
+		Acquire(numCustomersLock);
+		if(numCustomersWhoHaveLeftTheOffice + numSenatorsWhoHaveLeftTheOffice == numCustomers + numSenators) {
+			Release(numCustomersLock);
 			break;
 		}
+		Release(numCustomersLock);
 		Acquire(cashLineLock);
 		if(cc->numBribeLine > 0){
 			PrintfInt("Cashier %d has signalled a customer to come to their counter\n", sizeof("Cashier %d has signalled a customer to come to their counter\n"), index);
@@ -1036,7 +1084,7 @@ void ManagerThread(int index) {
 			}
 		}
 		total += appClerkCash;
-		if(iterations >= printCount) PrintfInt("Manager has counted a total of $%d for ApplicationClerks\n", sizeof("Manager has counted a total of $%d for ApplicationClerks\n"), appClerkCash);
+		if(iterations >= printCount) PrintLargeInt("Manager has counted a total of $%d for ApplicationClerks\n", sizeof("Manager has counted a total of $%d for ApplicationClerks\n"), appClerkCash);
 		Release(appLineLock);
 		Acquire(picLineLock);
 		for(i = 0; i < numPicClerks; i++) {
@@ -1052,7 +1100,7 @@ void ManagerThread(int index) {
 			}
 		}
 		total += picClerkCash;
-		if(iterations >= printCount) PrintfInt("Manager has counted a total of $%d for PictureClerks\n", sizeof("Manager has counted a total of $%d for PictureClerks\n"), picClerkCash);
+		if(iterations >= printCount) PrintLargeInt("Manager has counted a total of $%d for PictureClerks\n", sizeof("Manager has counted a total of $%d for PictureClerks\n"), picClerkCash);
 		Release(picLineLock);
 		Acquire(passLineLock);
 		for(i = 0; i < numPassClerks; i++) {
@@ -1069,7 +1117,7 @@ void ManagerThread(int index) {
 			}
 		}
 		total += passClerkCash;
-		if(iterations >= printCount) PrintfInt("Manager has counted a total of $%d for PassportClerks\n", sizeof("Manager has counted a total of $%d for PassportClerks\n"), passClerkCash);
+		if(iterations >= printCount) PrintLargeInt("Manager has counted a total of $%d for PassportClerks\n", sizeof("Manager has counted a total of $%d for PassportClerks\n"), passClerkCash);
 		Release(passLineLock);
 		Acquire(cashLineLock);
 		for(i = 0; i < numCashClerks; i++) {
@@ -1086,21 +1134,24 @@ void ManagerThread(int index) {
 		}
 		Acquire(cashCashLock);
 		total += cashClerkCash;
-		if(iterations >= printCount) PrintfInt("Manager has counted a total of $%d for Cashiers\n", sizeof("Manager has counted a total of $%d for Cashiers\n"), cashClerkCash);		/*lock when calculating cash to avoid race conditions*/
+		if(iterations >= printCount) PrintLargeInt("Manager has counted a total of $%d for Cashiers\n", sizeof("Manager has counted a total of $%d for Cashiers\n"), cashClerkCash);		/*lock when calculating cash to avoid race conditions*/
 		Release(cashCashLock);
 		Release(cashLineLock);
 		for(i = 0; i < 35; i++) {
 			Yield();
 		}
 		if(iterations >= printCount) {
-			PrintfInt("Manager has counted a total of $%d for the passport office\n", sizeof("Manager has counted a total of $%d for the passport office\n"), total);		/*printing total money made at the passport office*/
+			PrintLargeInt("Manager has counted a total of $%d for the passport office\n", sizeof("Manager has counted a total of $%d for the passport office\n"), total);		/*printing total money made at the passport office*/
 			iterations = 0;
 		}
 		
 		/*End of simulation condition*/
+		Acquire(numCustomersLock);
 		if(numCustomersWhoHaveLeftTheOffice + numSenatorsWhoHaveLeftTheOffice == numCustomers + numSenators) {
+			Release(numCustomersLock);
 			break;
 		}
+		Release(numCustomersLock);
 		iterations++;
 	}
 	Exit(0);
@@ -1143,15 +1194,15 @@ void StartSimulation(){
 /*Part 2 of the project gives user choice of test to run*/
 void main() {
 	
-	Write("Enter the number of the test you would like to run", sizeof("Enter the number of the test you would like to run"), ConsoleOutput);
-	Write("Test 1: Customers always take the shortest line, but no 2 customers ever choose the same shortest line at the same time", sizeof("Test 1: Customers always take the shortest line, but no 2 customers ever choose the same shortest line at the same time"), ConsoleOutput);
-	Write("Test 2: Managers only read one from one Clerk's total money received, at a time.", sizeof("Test 2: Managers only read one from one Clerk's total money received, at a time."), ConsoleOutput);
-	Write("Test 3: Customers do not leave until they are given their passport by the Cashier. The Cashier does not start on another customer until they know that the last Customer has left their area", sizeof("Test 3: Customers do not leave until they are given their passport by the Cashier. The Cashier does not start on another customer until they know that the last Customer has left their area"), ConsoleOutput);
-	Write("Test 4: Clerks go on break when they have no one waiting in their line", sizeof("Test 4: Clerks go on break when they have no one waiting in their line"), ConsoleOutput);
-	Write("Test 5: Managers get Clerks off their break when lines get too long", sizeof("Test 5: Managers get Clerks off their break when lines get too long"), ConsoleOutput);
-	Write("Test 6: Total sales never suffers from a race condition", sizeof("Test 6: Total sales never suffers from a race condition"), ConsoleOutput);
-	Write("Test 7: The behavior of Customers is proper when Senators arrive. This is before, during, and after.", sizeof("Test 7: The behavior of Customers is proper when Senators arrive. This is before, during, and after."), ConsoleOutput);
-	Write("Test 8: Full Simulation, user chooses number of threads", sizeof("Test 8: Full Simulation, user chooses number of threads"), ConsoleOutput);
+	Write("Enter the number of the test you would like to run\n", sizeof("Enter the number of the test you would like to run\n"), ConsoleOutput);
+	Write("Test 1: Customers always take the shortest line, but no 2 customers ever choose the same shortest line at the same time\n", sizeof("Test 1: Customers always take the shortest line, but no 2 customers ever choose the same shortest line at the same time\n"), ConsoleOutput);
+	Write("Test 2: Managers only read one from one Clerk's total money received, at a time.\n", sizeof("Test 2: Managers only read one from one Clerk's total money received, at a time.\n"), ConsoleOutput);
+	Write("Test 3: Customers do not leave until they are given their passport by the Cashier. The Cashier does not start on another customer until they know that the last Customer has left their area\n", sizeof("Test 3: Customers do not leave until they are given their passport by the Cashier. The Cashier does not start on another customer until they know that the last Customer has left their area\n"), ConsoleOutput);
+	Write("Test 4: Clerks go on break when they have no one waiting in their line\n", sizeof("Test 4: Clerks go on break when they have no one waiting in their line\n"), ConsoleOutput);
+	Write("Test 5: Managers get Clerks off their break when lines get too long\n", sizeof("Test 5: Managers get Clerks off their break when lines get too long\n"), ConsoleOutput);
+	Write("Test 6: Total sales never suffers from a race condition\n", sizeof("Test 6: Total sales never suffers from a race condition\n"), ConsoleOutput);
+	Write("Test 7: The behavior of Customers is proper when Senators arrive. This is before, during, and after.\n", sizeof("Test 7: The behavior of Customers is proper when Senators arrive. This is before, during, and after.\n"), ConsoleOutput);
+	Write("Test 8: Full Simulation, user chooses number of threads\n", sizeof("Test 8: Full Simulation, user chooses number of threads\n"), ConsoleOutput);
 
 	userChoice = ReadInt(1, 8);
 

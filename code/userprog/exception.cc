@@ -346,7 +346,7 @@ void Exit_Syscall(int status) {
   kp->numThreads--;
   kp->numRunningThreads--;
   if(kp->numRunningThreads == 0) {
-    printf("ending process");
+    DEBUG('a', "ending process");
     numProcesses--;
     for(int i = 0; i < numLocks; i++) {
       if(lockMap.Test(i)) {
@@ -504,8 +504,8 @@ int CreateCondition_Syscall(unsigned int vaddr, int len){
 }
 
 int Wait_Syscall(int index, int lock){
-  printf("Waiting condition Index %d , lock %d", index, lock);
-        printf("lock name is %s\n", lockTable[lock].lock->getName());
+  DEBUG('a', "Waiting condition Index %d , lock %d", index, lock);
+        DEBUG('a', "lock name is %s\n", lockTable[lock].lock->getName());
 
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
 
@@ -573,7 +573,7 @@ int Wait_Syscall(int index, int lock){
 }
 
 void Signal_Syscall(int index, int lock){
-  printf("Signalling condition Index %d , lock %d", index, lock);
+  DEBUG('a', "Signalling condition Index %d , lock %d", index, lock);
     lockTableLock->Acquire();
     if(lock < 0 || lock >= numLocks){
       printf("Trying to wait for invalid condition lock %d\n", lock);
@@ -715,24 +715,45 @@ void PrintfInt_Syscall(unsigned int vaddr, int len, int id){
 delete[] buf;
 }
 
+void PrintLargeInt_Syscall(unsigned int vaddr, int len, int id) {
+  char *buf;   // Kernel buffer for output
+
+
+ if ( !(buf = new char[len]) ) {
+    printf("%s","Error allocating kernel buffer for write!\n");
+    return;
+  } else {
+    if ( copyin(vaddr,len,buf) == -1 ) {
+     printf("%s","Bad pointer passed to to write: data not written\n");
+     delete[] buf;
+     return;
+   }
+  }
+  printf(buf, id);
+  delete[] buf;
+}
+
+
 void kernelThread(int vAddr){
 	currentThread->space->SaveState();
 	//set registers
 	machine->WriteRegister(PCReg, vAddr);
 	machine->WriteRegister(NextPCReg, vAddr + 4);
+   DEBUG('a', "--------------PC Register is %d\n", vAddr);
 	currentThread->space->stackMapLock->Acquire();
 	int stackID = currentThread->space->stackMap.Find();
 	currentThread->space->stackMapLock->Release();
 
 	if(stackID == -1){
-		printf("Cannot Fork. Not enough available threads in current process.");
+		DEBUG('a', "Cannot Fork. Not enough available threads in current process.");
 		Exit_Syscall(-1);
 	}
   currentThread->stackId = stackID;
   currentThread->space->AllocateStack(stackID);
 
-  printf("Stack id %d\n", stackID);
+  DEBUG('a', "Stack id %d\n", stackID);
   machine->WriteRegister(StackReg, (PageSize * currentThread->space->numCodePages) + (stackID + 1)*UserStackSize - 16);
+  DEBUG('a', "--------------Stack Register is %d\n", (PageSize * currentThread->space->numCodePages) + (stackID + 1)*UserStackSize - 16);
   currentThread->space->RestoreState();
   machine->Run();
 }
@@ -759,11 +780,11 @@ int Exec_Syscall(unsigned int vaddr, int len){
 
 
   if ( !(buf = new char[len]) ) {
-    printf("%s","Error allocating kernel buffer for write!\n");
+    DEBUG('a', "%s","Error allocating kernel buffer for write!\n");
     return -1;
   } else {
     if ( copyin(vaddr,len,buf) == -1 ) {
-      printf("%s","Bad pointer passed to to write: data not written\n");
+      DEBUG('a', "%s","Bad pointer passed to to write: data not written\n");
       delete[] buf;
       return -1;
     }
@@ -772,7 +793,7 @@ int Exec_Syscall(unsigned int vaddr, int len){
   AddrSpace *space;
 
   if (executable == NULL) {
-    printf("Unable to open execuatble file %s\n", buf);
+    DEBUG('a', "Unable to open execuatble file %s\n", buf);
     delete[] buf;
     return -1;
   }
@@ -912,6 +933,10 @@ void ExceptionHandler(ExceptionType which) {
        case SC_ReadInt:
        DEBUG('a', "Read int syscall.\n");  
        rv = ReadInt_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+       break;
+       case SC_PrintLargeInt:
+       DEBUG('a', "PrintLargeInt syscall.\n");
+       PrintLargeInt_Syscall(machine->ReadRegister(4), machine->ReadRegister(5), machine->ReadRegister(6));
        break;
      }
 

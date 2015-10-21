@@ -41,6 +41,7 @@
 #define SC_PrintfInt 20
 #define SC_Rand 21
 #define SC_ReadInt 22
+#define SC_PrintLargeInt 23
 
 #define MAXFILENAME 256
 
@@ -163,6 +164,8 @@ void Broadcast(int index, int lock);
 
 /*Misc syscalls to help with userprograms*/
 void PrintfInt(char* string, int size, int id);
+
+void PrintLargeInt(char* string, int size, int id);
 
 int Rand();
 

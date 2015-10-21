@@ -44,8 +44,9 @@ class AddrSpace {
 
     BitMap stackMap;
     int tableIndex;
+     TranslationEntry *pageTable;   // Assume linear page table translation
  private:
-    TranslationEntry *pageTable;	// Assume linear page table translation
+   
 					// for now!
     unsigned int numPages;      // Number of pages of code, init, and uninit in the virtual 
                     // address space
