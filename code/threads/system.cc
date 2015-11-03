@@ -37,6 +37,8 @@ Table processTable(maxProcesses);
 Lock *processTableLock;
 int numProcesses = 0;
 
+int currentTLBIndex = 0;
+
 #ifdef FILESYS_NEEDED
 FileSystem  *fileSystem;
 #endif

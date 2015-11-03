@@ -1,205 +1,153 @@
-Title:  Writeup for Project 1, Fall/Spring 2015
-Date:	09/20/2015
+Title:  Writeup for Project 2, Fall/Spring 2015
+Date:	10/20/2015
 Group:	Aditya Radhakrishna radh439@usc.edu
 		Kyle Vaidyanathan kvaidyan@usc.edu
  
 I. Requirements:
-	The requirement for part 1 is to implement Locks and Conditions in Nachos so that multithreaded programs have the tools to solve race conditions.
-The requirement for part 2 is to simulate a passport office. Customers randomly choose a type of clerk between application clerk, picture clerk, passport clerk, and cashier. 
-If none of the chosen clerk type is available, they either get in the regular line or pay $500 to get in the priority "bribe" line of the clerk with the shortest line. 
-Once they are signalled for their turn to come up to the clerk, some information is exchanged that takes time (in the form of thread yields), and then the customers randomly choose a new clerk type they haven't yet been to.
-At each clerk they exchange information They they must go to the cashier last, and the passport clerk second to last.
-- Describe what's your understanding of the requirements from the assignment statement. With the requirement analysis, you would be clear about what you are supposed to do.
+	Part 1: The requirement is to implement system calls for Yield, CreateLock, DestroyLock, Acquire, Release, CreateCondition, DestroyCondition, Wait, Signal, Broadcast, and Exit.
+		This includes tables and other variables for the OS to keep track of user programs' locks and conditions.
+	Part 2: The requirement is to implement system calls for Fork, Exec, and enhance the other system calls, especially Exit in order to properly keep the OS updated about the processes, threads, and resources.
+		The important requirement of part 2 is to implement multiprogramming so that a single address space can simultaneously handle multiple stacks and threads sharing resources using address translation through a page table. 
+		We are required to have a process table that keeps track of the number of executing threads in a process so that it can be ended if all threads stop running for some reason.
+		The implementation of these syscalls is required to be "bullet-proof" so that the OS never crashes from any user program.
+	Part 3: The requirement is to convert the Passport Office simulation program into a Nachos user program that uses system calls to achieve all of its features that are not available in C. This includes the syscalls from parts 1 and 2, as well as a few others as necessary such as printing integers.
 
 II. Assumptions:
-	1. We assume that the customers choose uniformly randomly amongst the clerks they still need to visit. After they successfully pass a type of clerk, they will not enter that type of clerk's line again.
-		If they go to a clerk in the wrong order (passport clerk before picture and application or cashier before all other three), then they are "punished."
-	2. We also assume that clerks will not go on break immediately after starting to work, that is, they will only go on break after serving at least one customer. This is to avoid clerks from constantly flipping back to being on break if no new customers immediately gets in their line.
-	3. We assume that the last clerk of a certain type will not go on break and will remain open. This is to avoid cases where customers get stuck with no available clerks of a certain type and therefore have no line to get into.
-	4. Managers will look for any line (bribe or regular) with three or more people and then signal a clerk of that type to come off break, they do not know which clerk will start working, only that it will be the one who has been on break for the longest.
-	5. Another important assumption is that customers cannot leave the clerk counter until the clerk has finished processing their information. This is for all clerks, not just the cashier. Meaning that once a customer leaves a clerk they can be sure their information was processed completely and recorded in their customer data object.
-	6. We assume that customers will always bribe if they have the money and there is at least one person in the regular line.
-	7. We assume that the Senators know what they are doing and will not choose their clerks randomly and instead will go through the clerks in a correct, fixed order.
-	
+	We assume the following maximums for the Nachos OS capabilities:
+		Each process may have  up to 100 threads (100 stacks).
+		The machine is set to have 100,000 physical pages of memory.
+		Nachos can simultaneously have 420 locks and 420 conditions, and will print an error and return -1 if it reaches it's limit.
+		
 III. Design:
-	+Lock Design
-	Our lock design follows the design specified in lecture exactly. There is a waiting queue (a list) of thread pointers that are put to sleep. No parts use busy waiting, instead they are put back into the ready queue if they are in the front of the queue and the lock is released.
-	
-	+Condition Design
-	Our condition system also follows the design detailed in lecture. Threads that call wait will release the lock (and must own it first), go to sleep, and then when they wake up will acquire the lock again.
-	
-	+Passport Office Data Structures
-	Customers keep their own private Customer object that stores their cash, ssn, and completed steps in the process. This data is not globally accessible to other threads.
-	There is also a CustomerData struct that is used only by the passport office for their database of customers and what they have completed. This does not include the cusomter's cash because the passport office does not keep track of that.
+	Our design for the system calls and multiprogramming is based on the lectures and the given assignment help guides. Locks and conditions are stored in arrays of KernelLock and KernelCondition structs. They have a lock to prevent race conditions and each have a bitmap to keep track of indices that are in use. The structs also keep track of waiting threads and a bool isToBeDeleted so that they will not be deleted while threads are waiting for the lock/condition.
+The process table uses the Table class defined in table.h to hold KernelProcess structs. 
+Each address space has a page table that can hold up to 100 stacks and a bitmap to keep track of which stacks in its page table are in use by threads. The virtual pages are not assigned physical pages unless they are actually in use by a thread.
 
-	A Clerk struct is used to store the data for all clerk types, such as line length, conditions, a lock, their current state (available, busy, or onbreak), and other data.
-	The array of clerks is globally accessible to all threads so that customers can check the line lengths and interact with the clerks.
-	
-	+Customers Entering Lines
-	To solve the race condition between clerks and customers entering lines, we use one lock for each type of clerk's line. This ensures mutual exclusion between threads that are accessing or modifing the lines.
-	Customers wait on a clerk's line condition variable (either bribe or regular), and clerks signal the condition if there are people waiting in line, always giving priority to the bribe line.
-	
-	+Customers Interacting with Clerks
-	The customer and clerk interactions require a separate lock, one specific to each clerk. This creates mutual exclusive access to the transferred data variables and cash variables. 
-	The clerk and customer then alternate between signalling and waiting on the clerk's counter condition so that the threads go in the correct sequence. This ensures the customer writes data to the clerk struct's dataIn variable before the clerk thread tries to read it, and the customer does not leave until the clerk has completed their processing.
-	
-	+Clerks going On and Off Break
-	Our design of the break system is meant to fix some of the many possibly edge cases that could arise. Clerks have three states:
-	Available: meaning that there is no one currently interacting with them. This happens in the first loop of the game and after coming off break. The thread is not running or busy waiting in this state, it is waiting for an initial signal from a customer.
-	Busy: Currently serving a customer. They will stay busy as long as there are people in either of their lines.
-	On Break: the clerk is not available, no one is in their line. The thread is not running or busy waiting in this state, they are waiting to be signalled by the manager.	
-	Clerks go on break when there is nobody in either of their lines. 
-	To solve the problem where all the clerks from going on break at the same time, we added a check so that at least one clerk must be working at all times. 
-	The other problem was clerks repeatedly going on and off break and flooding the output when they come off work and no new customers join their line. To solve this we added a check that clerks must serve at least one person before taking a break.
-	
-	+Clerks collecting Money from Customers
-	Customers pay bribes when they get in the bribe line, this ensure mutual exclusion of editing the clerk type's cash amount because the customers have the line lock while they do this. 
-	For the cashiers however, there is an additonal lock that must be obtained specifically for the cash because the it is also modified during the passport payment process.
-	
-	+Managers
-	There is one manager who goes through each clerk type and does the follow algorithm:
-		Check all lines and bribe lines: if any lines has more than three people waiting, or if all clerks of a single type are on break, then signal to wake up one clerk thread of the relevant type. 
-	The manager also prints the total money collected so far from bribes and payments(to cashier only) from each clerk, as well as the sum of all these values. 
-	To read these values, he acquires the relevant lock or locks so that no thread can be editting the value as it is being read.
-	
-	+Senators
-	Senators arrive after a random amount of yields, between 100 and 1000. When they arrive they clear out everyone from their lines, and all other customers wait on the senator condition for leaving. 
-	If another senator arrives while there is currently one in the office, he or she also waits for the previous senator to leave.  
-	Senators go from ApplicationClerk to PictureClerk to PassportClerk and then to the Cashier, always in this order. When they leave they broadcast to all other threads waiting for them to leave.
-	Customers will check if there is a senator present before entering a new line and they will keep waiting until there are 0 senators left.
 
 IV. Implementation:
 	+ Files Modified
-	Modified: synch.h, synch.cc, threadtest.cc, main.cc
+		
+		userprog/syscall.h - Added new interfaces for syscalls for user programs
+		userprog/exception.cc - Added implementation of all system calls
+		userprog/addrspace.cc and addrspace.h - Multithreaded process support in address space
+
+		threads/system.cc and system.h - Added data structures for OS
+		threads/synch.cc and synch.h - Added returns from Lock/Condition functions for keeping track of sleeping threads, and public bool isHeld function to test if a lock is free or not
+		threads/thread.h - Added stackId field (for user program threads to keep track of their stack in the address space
+
+		test/start.s - Added code for all the new syscalls
+		test/Makefile - Added compile lines for making all user programs
+		
+		machine/machine.h - Increased numPhysPages to 100000	
+
 	+ Files added 
-	None.
+		test/yieldTest.c
+		test/lockTest.c
+		test/threadsTest.c
+		test/conditionTest.c
+		test/execTest.c
+		test/passportoffice.c
+	
 	+ Data Structures added, and the file they were added to.
-		
-	threadtest.cc : 
-		Customer struct:
-			Each customer thread has their own PRIVATE customer object for their own information that they will provide to the clerks.
-			int cash - money the customer has left to spend. New customers are created with either $100, $600, $1100, or $1600, chosen randomly.
-			int ssn - indentification number, increases sequencialy for each customer created. From 0 up to numCustomers.
-			bool appAccepted set true when a customer has had his app accepted by the application clerk
-			bool picTaken set true once they get a picture they like
-			bool appFiled set true after successfully going through the passport clerk with both appAccept and picTaken being true
-			bool hasPaidCashier set true once they have given $100 to the cashier (regardless of if they received their passport yet)
-			bool hasPassport for receiving the passport from the cashier after all the other booleans are true.
+		system.h/.cc
+		KernelLock struct: hold pointer to real lock as well as the address space it was created by, the number of waiting threads, bool for whether it is to deleted when possible.
+		KernelCondtion struct: hold pointer to condition as well as the address space it was created by, the number of waiting threads, and bool for whether it is to be deleted when possible.
+		KernelProcess struct: holds all the information about a process, most importantly the number of currently running threads.
 
-		CustomerData struct:
-			A struct that the passport office database to store data about the customers
-			int ssn - a copy of the customer's ssn (which is also the index for this customer in the office's database)
-			bool appAccepted set true after the application clerk receives the customer's ssn
-			bool picTaken set true after the customer confirms they like their picture
-			bool appFiled set true once lthe passport clerk has filed their application
-			bool hasPaidCashier set true once the passport office has received $100 from this customer (regardless of if they received their passport yet)
-			bool hasPassport set true once the passport office has issued a passport to the customer
-
-		Clerk struct: 
-			A struct to contain all variables specific to one clerk.
-			int numLine - number of people in this clerk's line
-			int numBribeLine - number of custoemrs in this clerk's priority bribe line
-			bool servedOne - whether this clerk has served at least one customer since coming off break or starting work
-			CLERK_STATE state - whether the clerk is available, busy, or on break. 
-			Condition* waitCondition - Condition for customers waiting in the regular line, clerk signals this condition to allow next customer in line to come to the counter
-			Condition* bribeWaitCondition - Condition for customers waiting in the bribe line.
-			Lock* ClerkLock - lock that ensure mutual exclusion for shared data between a customer and the clerk.
-			Condition* ClerkCV - Condition using ClerkLock for corect sequencing of events between the customer and the clerk so one thread waits for the other to signal they have completed their part.
-			int dataIn - a variable for exchanging data between customer and clerk threads. Customers write and clerks read this value during the interaction.
-		
-		Global data structures:
-			CustomerDatabase array of CustomerData that the passport office uses to keep track of the customer's information on which clerks they have visited. It is indexed by SSN.
-			Arrays for each type of clerk. 
-			
+		KernelLock array lockTable, BitMap lockMap, and Lock lockTableLock - to keep track of locks for user programs
+		KernelCondition array conditionTable, BitMap conditionMap, and Lock conditionTableLock - to keep track of conditions for user programs
+		Table processTable, Lock processTableLock - to keep track of processes
+		BitMap memoryMap and Lock memoryMapLock - to keep track of pages of physical memory.
 	
-	+ Data Structures modified, and the file they were added to.
-		Lock class in files synch.h/synch.cc
-			queue - A List of thread pointers to threads currently waiting to acquire the lock and enter the critical section. 
-				New threads added to the back of the list, and when the lock is released the thread removed from the front gets ownership next.
-			owner - A Thread pointer that points to the thread that currently has ownership of the lock
-		Condition class in files synch.h/synch.cc
-			queue - A List of thead pointers to threads currently waiting on this condition. New waiting threads are added to the back of the list, signalled threads are removed from the front.
-			waitingLock - A pointer to the lock that the condition is currently associated with. Waiting and signalling threads must own this lock. If nobody is waiting then the waitingLock is NULL.
-
-
+		
+	+ Data Structures modified, and the file they were in.
+		none.
 	+ Functions added and in which file.
-		CustomerThread - Has a private customer object for their own personal data. Controls the customer thread's core loop of choosing a clerk, waiting in line, and then interacting with the clerk until they have completed all steps in the correct order and received a passport.
-		
-		AppClerkThread - Defines the Application Clerk's behavior loop for signalling customers from lines, going on break, and performing their task.
-		
-		PicClerkThread- Defines the Picture Clerk's behavior loop for signalling customers from lines, going on break, and performing their task. When a customer decides they don't like their picture, this clerk sends them away and the customer can then go to any clerk.
-		
-		PassClerkThread  - Defines the Passport Clerk's behavior loop for signalling customers from lines, going on break, and performing their task. 
-		If a customer comes here and does not meet the requirement of having a picture and an accepted applicaion, then they are sent away from the counter first, then made to wait a random amount of yields before rechoosing which clerk to go to.
-		
-		CashClerkThread- Defines the app clerk's behavior loop for signalling customers from lines, going on break, and performing their task.
-		If a customer comes here and does not meet the requirement of having successfully passed the Passport Clerk, then they are sent away from the counter first, then made to wait a random amount of yields before rechoosing which clerk to go to.
-		 
-		ManagerThread - Defines the manager's core loop behavior of checking each type of clerk t see if anyone needs to be woken up from break and printing how much money has been collected.
-		The manager yields some number of times after he checks each time so that he is only acting occaisonally. He also prints the money amounts regularly but not every time he checks for clerks on break.
-		
-	+ Functions modified and in which file.
-		Acquire in Lock Class in synch.h/synch.cc 
-			Implemented standard Lock acquire function. If another thread has the lock, the current thread is put in a waiting queue and is put to sleep. No busy waiting.
-		
-		Release in Lock Class in synch.h/synch.cc 
-			Implemented standard lock release function. Only the owner of the lock can release it. When released, if there are wany waiting threads the first one in the queue is put into the scheduler's ready queue and made the new lock owner.
-		
-		isHeldByCurrentThread in Lock class in synch.h/synch.cc 
-			returns true if currentThread is the owner of the lock
-			
-		Wait in Condition Class in synch.h/synch.cc 
-			Implements wait for a condition. Checks that the current thread is passing the correct waiting Lock and that they are the current owner. While waiting, the thread gives up the lock and is put in a queue. THe thread goes to sleep and once awoken must reaquire the lock.
-		
-		Signal in Condition Class in synch.h/synch.cc 
-			Implements signal for a condition. CHecks that the current thread is assing the correct waiting Lock and that they are the current owner. If any threads are waiting on the condition, they will be put in the scheduler's ready queue.
-		
-		Broadcast in Condtition Class in synch.h/synch.cc 
-			This function repeatedly signals the condition until there are no more threads waiting. 
-		
+		addrspace.cc
+			AllocateStack(int stackID) - adds 8 pages for stack in the correct place in the page table and allocates physical pages for them.
+DeallocateStack(int stackID) - frees up the 8 pages of physical memory allocated to the given stack (calls DeallocatePage)
+DeallocatePage(int index) - frees up the page in main memory.
 
-V. Testing:  (For each test case, you must show)
+		exception.cc
+			All the syscalls are implemented as separate functions here
+			Yield_Syscall - yields current thread
+CreateLock_Syscall - creates a new kernel lock and returns its index
+DestroyLock_Sycall - takes a kernel lock index and deletes it(or marks it to be deleted)
+Acquire_Syscall - takes a kernel lock index and calls acquire on the lock
+Release_Syscall - takes a kernel lock index and calls release on the lock
+
+CreateCondition_Syscall - creates a kernel condition and returns the index
+DestroyCondition_Syscall - takes a kernel condition index and deletes it(or marks it to be deleted)
+Wait_Syscall - takes a kernel condition index and a kernel lock index and calls wait on the condition with the lock
+Signal_Syscall - takes a kernel condition index and a kernel lock index and calls signal on the condition with the lock
+Broadcast_Syscall - takes a kernel condition index and a kernel lock index and calls broadcast on the condition with the lock
+
+Exit_Syscall - Ends the current thread. If it is the last thread in the process then it ends the process and frees the resources. If it is the last thread in the last process, then it halts nachos.
+
+Fork_Syscall - Takes a virtual address of a function and creates a new thread in the same address space, forking it with the kernelThread function
+kernelThread - Initializes the registers and stack for a new thread and then sets the machine to run the function passed into Fork by the user program.
+
+Exec_Sycall - Takes a name of a file and creates a new process address space and a main thread for it. Forks mainProcessThread to be the main of the new process
+mainProcessThread - Initializes a new address space and starts running the executable.
+
+PrintfInt - Takes in a char* that follows printf format (with %d) for example and prints it to the console. This function does special modulus math to be able to print multiple integers that are smaller than 100. To pass two integers the user program must add 1000 and add 1000 times the second value. For a third integer to be passed, the user program must add 100000 and add 100000 times the third value.
+PrintLargeInt - takes a char* that follows printf format and prints it to the console. This does not parse or make any changes to the integer so it can print any size integer. 
+Rand - simply returns a random value between 0 and the c++ MAX_RAND by calling rand() and returning the exact value to the user program
+ReadInt - takes a min and max and reads an integer from the user console input, asking them again if it is outside the specified range.
+			
+
+	+ Functions modified and in which file.
+addrspace.cc
+Constructor: Changed this function to use the page table and find available pages in main memory. Now capable of handling multiple threads.
+
+synch.cc
+Acquire, Release, Signal, Wait, Broadcast changed to return the number of threads that were woken up. For the case of acquire and wait it returns 1 only if the thread never went to sleep. Threads that went to sleep will be noted as awake again by the release, signal, and broadcast calls that woke them up.
+
+exception.cc
+	ExceptionHandler added switch cases for all our syscalls
+
+
+V. Testing: 
 	+ How to test
-	To run the tests, run the command nachos -P2 -rs 5. Then you will be given a menu of all tests as well as an option to specify exactly the number of clerks and customers and run a full simulation.
-	Enter the number of the test you wish to run. When the test has completed, you must run the program again to choose another test.
-	If you would like to send the output to a text file. Run nachos -P2 -rs 5 > outputFileName.txt
-	The menu will also be printed to the file, but you can still enter 1 through 8 and then enter to choose a test.
-	
+		For all of the following tests, first go to the userprog directory and run “setenv PATH ../gnu/:$PATH” then run “gmake” . Then go to the test directory and run “gmake” to compile the user programs. Then go back to the userprog directory and run one of the tests below:
+		Yield Test : run “nachos -x ../test/yieldTest”
+		Lock Test :  run “nachos -x ../test/lockTest”
+		Conditions :  run “nachos -x ../test/conditionTest”
+		Fork :  run “nachos -x ../test/forkTest”
+		Exec :  run “nachos -x ../test/execTest”
+		Passport Office tests: run “nachos -x ../test/passportoffice”
+		Multi Passport Office Test: run “nachos -x ../test/multipassportofficeTest”
+
 	+ Test Output
-	To see the output 
-	Here is a description of the important thigns to notice from each test output.
-		Test 1: The customers alternate while cashier lines to get into, picking the shortest one available 	
-		Test 2: The managers accurately print the totals for each clerk type 
-		Test 3: The customers only leave after they are given their passports and the cashiers only signal the next customer after the customer leaves
-		Test 4: After clerks serve at least one customer, if their lines are empty they go on break
-		Test 5: After serving a few customers the clerks go on break, when a large wave of customers come in the clerks are woken up
-		Test 6: Total sales are always equal to the sum of all the clerk types sales
-		Test 7: When a senator arrives all the customers in line leave, whichever customers are currently being served leave once they are done and once the senator is done they all come back to the correct type of clerk line
-	
+	Yield test prints a message and then yields
+
+	Lock test creates locks and then prints error messages when trying to acquire, release and destroy invalid and uninstantiated locks. Main thread releases lock num 1 which lock acquire thread can then acquire
+
+	Condition Test creates locks and conditions and then prints error messages for trying to wait, signal and broadcast conditions when the thread does not hold the lock for that condition and when the condition has not been instantiated. The wait thread then waits and the signal thread signals it. Multiple sleep threads wait on a condition and broadcast thread broadcasts on that condition
+
+	Fork Test prints out a message saying exec’d multiple times
+
+	Exec Test prints messages indicating that it is launching yieldTest and threadsTest which then print testing yield and 40 iterations of forking thread respectively
+
+Passport Office prompts the user for which test they would like to run and for num customers, senators and clerks depending on which test they chose. It then prints the interactions between the customers and clerks and finally prints out when the last customer leaves before ending
+
+Multi Passport Office test runs two separate instances of passport office each of them prompt the user for their respective inputs and run the appropriate test with the same output as a passport office 		
+
 VI. Discussion:
 	+ Experiment expectation.  (What is supposed to happen.)
-		As mentioned above in the test output section above, we expect to have the tests to have output that matches the following descriptions:
-		Test 1: The customers alternate while cashier lines to get into, picking the shortest one available 	
-		Test 2: The managers accurately print the totals for each clerk type 
-		Test 3: The customers only leave after they are given their passports and the cashiers only signal the next customer after the customer leaves
-		Test 4: After clerks serve at least one customer, if their lines are empty they go on break
-		Test 5: After serving a few customers the clerks go on break, when a large wave of customers come in the clerks are woken up
-		Test 6: Total sales are always equal to the sum of all the clerk types sales
-		Test 7: When a senator arrives all the customers in line leave, whichever customers are currently being served leave once they are done and once the senator is done they all come back to the correct type of clerk line
-	
-		
-	+ Experiment result.  (What actually happened.)
-		All of our tests, after some debugging, matches the expected outcomes outlined above. 
-		
+		The main experiment is to run the passport office from project 1 as a user program using the syscalls from part 1 and 2. We expect to see normal execution of the passport office including all of it’s sub test cases and the full simulation. The customers should all leave the office causing the execution to complete. If the management of threads is done correctly in the process table, nachos should halt at the end because there are no more running threads in the process. We expect there to be no race conditions just as in project 1, this includes customers choosing the shortest line, customers not leaving the office until they have a passport, clerks going to break and managers waking up clerks on break, etc. 
+		Furthermore, using our Exec syscall, we expect that we can run two passport offices simultaneously without any errors occurring. When two are running, the user would need to give input for the setup of both passport offices, and it is not possible to tell which process is being interacted with.
+		For the individual tests described above in the Testing section, the code and comments in the files describe what specific case is being tested, these are the simple tests that try to break the OS by giving invalid input as well as the correct usage of each syscall.
+
+	+ Experiment result
+As expected, the passport office ran properly without errors and using only our syscalls avoided any of the race conditions. The forking of many new threads (up to 50 customers, 10 senators, 5 of each clerk) does not cause any page fault exceptions.
+Running a user program that execs two passport offices also behaved as expected. It was not possible to tell which instance is receiving the input, but both passport offices ran to completion.
+The individual tests were used to debug problem with our syscalls, and their result is as we expect them to be which is how we determined they were working correctly before running the main experiment, the passport office. These tests cause Nachos to print out error messages when the user program used incorrect parameters.
+
 	+ Explanation
-		Test 1: For the first test we initialized the customers to only need the cashier, and we set the customers to all have only 100 dollars so no bribing was possible. The first two customers went directly to the cashiers at line 1 and line 0 respectively when both cashiers had lines of length 0, they didn't choose the same shortest line. The customers after that alternate between the first and second line picking the shortest one available at the time which shows that they always pick the shortest line
-		Test 2: Each time the manager prints out the money made from each type of clerk, it is equal to the sum of all previous print statements about clerks receving money. This shows that the money transferred to clerks are all accounted for without race condtions, and there is mutual exclusion when clerks add to the sum and when managers read the sum.
-		Test 3: Customers print they are leaving after the cashier prints that they have given a passport showing that they are waiting for the passport before leaving, and the cashiers print that they are signalling their next customer after the previous one leaves. This shows that the customer and clerk are waiting for signals from the other thread before continuing with their prints.
-		Test 4: When clerks that print that they are going on break, they have served equal number of people as people who have entered their lines. This shows that their lines are empty before they go on break.
-		Test 5: The clerks go on break at first, but then a wave of customers enter their lines to the point where some clerks have 3 or more people in line. Once the manager thread runs again, clerks of the same type are woken up. This shows that the manager thread is regularly checking the line lengths and can signal to one of the clerk threads of the correct type to wake up.
-		Test 6: When the manager calculates the total, he saves each subtotal from his output of individual clerk types so that the printed total is exactly equal to the sum of the different clerks, even if clerks received money in the middle of printing. This shows that the manager and clerk threads have mutual exclusion when accessing the money variables.
-		Test 7: The Senator does not enter the first line until all customers (who ahven't already gotten their passport and left) have said they have gone outside. This shows that senators fully clear the building first. The senators also perform all their clerk interaction uninteruppted, which shows that no other customer or senator threads can run at the same time. The customers go back to the same clerk type they were at before the senator which show that customers are remembering their clerk choice after being cleared out.
+		The passport offices uses up to 80 threads within a single process that share data while also running separate code, which shows that our fork syscall properly allocates different stacks within the same address space. The threads also access shared data using locks and conditions and does not output anything incorrect, showing that our lock and condition syscalls are properly ensuring mutual exclusion and sequencing by interfacing between the user program and the locks and conditions implemented in project 1.
+		Each of the individual tests listed in the Testing section above demonstrate that the syscalls are safe from all kinds of user programs and cannot be used to crash nachos. They show this by calling syscalls with various incorrect input, and nachos only printed error messages but did not crash or throw any exceptions. The only way to cause nachos to halt is by exiting/sleeping all threads, calling halt, or by exceeding the system maximums described in the Assumptions section above.
+
 
 VIII. Miscellaneous:
-	There was some amount of confusion with the Piazza answers for ambiguous parts of the assignment. We followed the part of the assignment that said the project is intentionally undersepcified so we can make our own design choices.
-	As a result, our passport office does not match exactly some aspects that we later found on Piazza, but instead we made some logical assumptions about the thread behaviors. This includes extra constraints for going on break and making customers choose a clerk type again randomly after being punished instead of gonig back to the same line.
+	When the passport office has the max number of people (50 customers, 10 senators, 5 clerks) it takes a bit of time to complete, it may look like an infinite loop, but give it a minute or two and it will end most of the time. Sometimes test case 8 ends early and we're not sure why.

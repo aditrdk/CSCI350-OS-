@@ -2,7 +2,7 @@
 
 int main() {
 
-	Write("Testing Yield", sizeof("Testing Yield"), ConsoleOutput );
+	Write("Testing Yield\n", sizeof("Testing Yield\n"), ConsoleOutput );
 	Yield();
 	Exit(0);
 }

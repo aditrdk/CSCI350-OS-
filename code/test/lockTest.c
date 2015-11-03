@@ -1,52 +1,61 @@
 #include "syscall.h"
 
+int lockNum2;
+
+void lockAcquireThread() {
+	/*Release a lock you don't own*/
+	Release(lockNum2);
+	/*Acquire a lock that's currently being held*/
+	PrintfInt("lock Acquire Thread trying to acquire lock num %d\n", sizeof("lock Acquire Thread trying to acquire lock num %d\n"), lockNum2);
+	Acquire(lockNum2);
+	PrintfInt("lock Acquire Thread acquired lock num %d\n", sizeof("lock Acquire Thread acquired lock num %d\n"), lockNum2);
+	/*Try to destroy a lock that's in use*/
+	DestroyLock(lockNum2);
+	/*Release a lock that is marked to be deleted*/
+	Release(lockNum2);
+	Exit(1);
+}
+
 int main() {
 	int lockNum;
-	int lockNum2;
+	int i;
 	Write("Testing CreateLock\n", sizeof("Testing CreateLock\n"), ConsoleOutput );
-
+	/* Test create lock*/
 	lockNum = CreateLock("TestLock", sizeof("TestLock"));
-	if(lockNum == 0) {
-		Write("Lock index 0\n", sizeof("Lock index 0\n"), ConsoleOutput );
-	}
-	else {
-		Write("Not index 0\n", sizeof("ock index 0\n"), ConsoleOutput );
-	}
-
 	lockNum2 = CreateLock("TestLock2", sizeof("TestLock2"));
-	if(lockNum2 == 0) {
-		Write("Lock index 0\n", sizeof("Lock index 0\n"), ConsoleOutput );
-	}
-	else {
-		Write("Not index 0\n", sizeof("ock index 0\n"), ConsoleOutput );
+
+	Yield();
+
+	/*Test Acquire Lock*/
+	Acquire(lockNum);	
+	Acquire(lockNum);
+	Acquire(lockNum2);
+	Fork(lockAcquireThread);
+	Acquire(-22);
+	Acquire(33);
+	for(i = 0; i < 5; i++){ 
+		Yield();
 	}
 
-	Write("Destroying lock \n", sizeof("Destroying lock \n"), ConsoleOutput );
+	/*Test Release Lock*/
+	PrintfInt("main Thread releasing lock num %d\n", sizeof("main Thread releasing lock num %d\n"), lockNum2);
+	Release(lockNum2);
+	Release(-2);
 
-	DestroyLock(lockNum2);
+	/*Test destroy lock*/
+	DestroyLock(lockNum);
 	DestroyLock(-1);
 	DestroyLock(55);
 	DestroyLock(9000);
 
+
+
+
+
+	/*Try to acquire, release amd destroy a destroyed lock*/
 	Acquire(lockNum);
-	Acquire(lockNum2);
-	Acquire(33);
-	Acquire(-22);
-
-
 	Release(lockNum);
-	Release(lockNum2);
-	Release(-2);
-
-	Acquire(lockNum);
 	DestroyLock(lockNum);
-	Acquire(lockNum);
-	Release(lockNum);
-	
-	Acquire(lockNum);
-	Release(lockNum);
 
-
-
-	Halt();
+	Exit(1);
 }

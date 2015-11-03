@@ -340,6 +340,7 @@ void DestroyCondition_Syscall(int index){
 }
 
 void Exit_Syscall(int status) {
+  DEBUG('a', "Exit status: %d\n", status);
   KernelProcess *kp;
   kp = (KernelProcess*)processTable.Get(currentThread->space->tableIndex);
   processTableLock->Acquire();
@@ -834,11 +835,32 @@ int ReadInt_Syscall(int min, int max) {
   return userChoice;
 }
 
+void HandlePageFault(int vaddr) {
+  TranslationEntry* readEntry = &currentThread->space->pageTable[vaddr/PageSize];
+  if(!readEntry->valid){
+    printf("Trying to access invalid page\n");
+    return;
+  }
+  IntStatus oldLevel = interrupt->SetLevel(IntOff);
+  machine->tlb[currentTLBIndex].physicalPage = readEntry->physicalPage;
+  printf("Physical page number: %d\n", machine->tlb[currentTLBIndex].physicalPage);
+  machine->tlb[currentTLBIndex].virtualPage = readEntry->virtualPage;
+  machine->tlb[currentTLBIndex].valid = true;
+  machine->tlb[currentTLBIndex].readOnly = readEntry->readOnly;
+  machine->tlb[currentTLBIndex].dirty = readEntry->dirty;
+  //machine->tlb[currentTLBIndex].use = true;
+  currentTLBIndex = (currentTLBIndex + 1)%4;
+  interrupt->SetLevel(oldLevel);
+}
+
 void ExceptionHandler(ExceptionType which) {
     int type = machine->ReadRegister(2); // Which syscall?
     int rv=0; 	// the return value from a syscall
-
-    if ( which == SyscallException ) {
+    if(which == PageFaultException) {
+      int vaddr = machine->ReadRegister(BadVAddrReg);
+      HandlePageFault(vaddr);
+    }
+    else if ( which == SyscallException ) {
      switch (type) {
        default:
        DEBUG('a', "Unknown syscall - shutting down.\n");

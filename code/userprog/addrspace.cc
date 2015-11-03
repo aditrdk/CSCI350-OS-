@@ -170,7 +170,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
         else{
             pageTable[i].valid = FALSE;
         }
-        pageTable[i].use = FALSE;
+        //pageTable[i].use = FALSE;
         pageTable[i].dirty = FALSE;
     	pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
     					// a separate page, we could set its 
@@ -234,7 +234,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
 AddrSpace::~AddrSpace()
 {
     for(int i = 0; i < numCodePages + numStackPages; i++) {
-        if(pageTable[i].valid == true){
+        if(pageTable[i].valid == TRUE){
             DeallocatePage(i);
         }
     }
@@ -283,7 +283,13 @@ AddrSpace::InitRegisters()
 //----------------------------------------------------------------------
 
 void AddrSpace::SaveState() 
-{}
+{
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    for(int i = 0; i < 4; i++){
+        machine->tlb[i].valid = FALSE;
+    }
+    interrupt->SetLevel(oldLevel);
+}
 
 //----------------------------------------------------------------------
 // AddrSpace::RestoreState
@@ -295,8 +301,13 @@ void AddrSpace::SaveState()
 
 void AddrSpace::RestoreState() 
 {
-    machine->pageTable = pageTable;
-    machine->pageTableSize = numStackPages + numCodePages;
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    for(int i = 0; i < 4; i++){
+        machine->tlb[i].valid = FALSE;
+    }
+    interrupt->SetLevel(oldLevel);
+    //machine->pageTable = pageTable;
+    //machine->pageTableSize = numStackPages + numCodePages;
 }
 
 void AddrSpace::AllocateStack(int stackID) {

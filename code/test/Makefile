@@ -31,7 +31,7 @@ CPP = $(GCCDIR)cpp
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt matmult sort testfiles yieldTest lockTest threadsTest execTest conditionTest passportoffice
+all: halt matmult sort testfiles yieldTest lockTest threadsTest execTest conditionTest forkTest printTest multipassportofficeTest passportoffice
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.s > strt.s
@@ -79,6 +79,24 @@ conditionTest.o: conditionTest.c
 conditionTest: conditionTest.o start.o
 	$(LD) $(LDFLAGS) start.o conditionTest.o -o conditionTest.coff
 	../bin/coff2noff conditionTest.coff conditionTest
+
+forkTest.o: forkTest.c
+	$(CC) $(CFLAGS) -c forkTest.c
+forkTest: forkTest.o start.o
+	$(LD) $(LDFLAGS) start.o forkTest.o -o forkTest.coff
+	../bin/coff2noff forkTest.coff forkTest
+
+printTest.o: printTest.c
+	$(CC) $(CFLAGS) -c printTest.c
+printTest: printTest.o start.o
+	$(LD) $(LDFLAGS) start.o printTest.o -o printTest.coff
+	../bin/coff2noff printTest.coff printTest
+
+multipassportofficeTest.o: multipassportofficeTest.c
+	$(CC) $(CFLAGS) -c multipassportofficeTest.c
+multipassportofficeTest: multipassportofficeTest.o start.o
+	$(LD) $(LDFLAGS) start.o multipassportofficeTest.o -o multipassportofficeTest.coff
+	../bin/coff2noff multipassportofficeTest.coff multipassportofficeTest
 
 matmult.o: matmult.c
 	$(CC) $(CFLAGS) -c matmult.c

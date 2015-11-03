@@ -71,6 +71,8 @@ extern BitMap conditionMap;
 extern int numConditions;
 extern Lock* conditionTableLock;
 
+extern int currentTLBIndex;
+
 #ifdef USER_PROGRAM
 #include "machine.h"
 extern Machine* machine;	// user program memory and registers

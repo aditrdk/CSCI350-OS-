@@ -1180,10 +1180,11 @@ void StartSimulation(){
 		Fork(CashClerkThread);
 	}
 
+	Fork(ManagerThread);
+
 	for(i = 0; i < numCustomers; i++) {
 		Fork(CustomerThread);
 	}
-	Fork(ManagerThread);
 
 	for(i = 0; i < numSenators; i++) {
 		Fork(SenatorThread);
