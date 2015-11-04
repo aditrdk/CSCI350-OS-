@@ -374,6 +374,11 @@ void Exit_Syscall(int status) {
     currentThread->space->DeallocateStack(currentThread->stackId);
     processTableLock->Release();
   }
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    for(int i = 0; i < 4; i++){
+        machine->tlb[i].valid = FALSE;
+    }
+    interrupt->SetLevel(oldLevel);
   currentThread->Finish();
 }
 
@@ -836,14 +841,17 @@ int ReadInt_Syscall(int min, int max) {
 }
 
 void HandlePageFault(int vaddr) {
+
   TranslationEntry* readEntry = &currentThread->space->pageTable[vaddr/PageSize];
+
   if(!readEntry->valid){
-    printf("Trying to access invalid page\n");
+    printf("Trying to access invalid page vpn %d ppn %d stackId %d\n", vaddr/PageSize, readEntry->physicalPage, currentThread->stackId);
+    interrupt->Halt();
     return;
   }
   IntStatus oldLevel = interrupt->SetLevel(IntOff);
   machine->tlb[currentTLBIndex].physicalPage = readEntry->physicalPage;
-  printf("Physical page number: %d\n", machine->tlb[currentTLBIndex].physicalPage);
+  printf("Virtual page number: %d Physical page number: %d\n", vaddr/PageSize, machine->tlb[currentTLBIndex].physicalPage);
   machine->tlb[currentTLBIndex].virtualPage = readEntry->virtualPage;
   machine->tlb[currentTLBIndex].valid = true;
   machine->tlb[currentTLBIndex].readOnly = readEntry->readOnly;

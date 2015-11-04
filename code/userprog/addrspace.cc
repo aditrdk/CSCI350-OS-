@@ -121,6 +121,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
     unsigned int i, size;
     KernelProcess *kp;
     stackMapLock = new Lock("Stack map lock");
+    pageTableLock = new Lock("Page table lock");
     stackMapLock->Acquire();
     stackMap.Find();  //Finding space for the the first stack
     stackMapLock->Release();
@@ -151,6 +152,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
     DEBUG('c', "Initializing address space, num total pages %d, size %d\n", 
        numCodePages + numStackPages, size);
 // first, set up the translation 
+    pageTableLock->Acquire();
     pageTable = new TranslationEntry[numCodePages + numStackPages];
     for (i = 0; i < numCodePages + numStackPages; i++) {
     	pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
@@ -176,7 +178,6 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
     					// a separate page, we could set its 
     					// pages to be read-only
     }
-
     //Add the new process to the process table
     processTableLock->Acquire();
     numProcesses++;
@@ -221,6 +222,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
 			noffH.initData.size, noffH.initData.inFileAddr);
     }
     */
+    pageTableLock->Release();
 
 }
 
@@ -306,6 +308,7 @@ void AddrSpace::RestoreState()
         machine->tlb[i].valid = FALSE;
     }
     interrupt->SetLevel(oldLevel);
+
     //machine->pageTable = pageTable;
     //machine->pageTableSize = numStackPages + numCodePages;
 }
@@ -322,16 +325,23 @@ void AddrSpace::AllocateStack(int stackID) {
         pageTable[i].physicalPage = index;
         pageTable[i].valid = TRUE;
     }
-    memoryMapLock->Release();
+        memoryMapLock->Release();
+
 }
 
 void AddrSpace::DeallocateStack(int stackID) {
+    stackMapLock->Acquire();
+    stackMap.Clear(stackID);
+
     for(int i = numCodePages + stackID*8; i < numCodePages + (stackID+1)*8; i++) {
         DeallocatePage(i);
     }
+    stackMapLock->Release();
+
 }
 
 void AddrSpace::DeallocatePage(int pageNo) {
+    printf("deallocating virtual page %d in stackId %d \n", pageNo, currentThread->stackId );
     memoryMapLock->Acquire();
     int index = pageTable[pageNo].physicalPage;
     memoryMap.Clear(index);

@@ -44,7 +44,8 @@ class AddrSpace {
 
     BitMap stackMap;
     int tableIndex;
-     TranslationEntry *pageTable;   // Assume linear page table translation
+    Lock *pageTableLock;
+    TranslationEntry *pageTable;   // Assume linear page table translation
  private:
    
 					// for now!
