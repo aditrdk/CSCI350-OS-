@@ -776,6 +776,7 @@ void Fork_Syscall(int vAddr){
 }
 
 void mainProcessThread(int n) {
+
   currentThread->space->InitRegisters();
   currentThread->space->RestoreState();  
   machine->Run();
@@ -841,22 +842,31 @@ int ReadInt_Syscall(int min, int max) {
 }
 
 void HandlePageFault(int vaddr) {
-
-  TranslationEntry* readEntry = &currentThread->space->pageTable[vaddr/PageSize];
-
+  int physPage = -1;
+  for(int i = 0; i < NumPhysPages; i++){
+    if(ipt[i].space == currentThread->space && ipt[i].virtualPage == vaddr/PageSize){
+     physPage = i;
+     break;
+   }
+  }
+  IPTEntry* readEntry = &ipt[physPage];
+  printf("Virtual page number: %d Physical page number: %d StackID: %d\n", vaddr/PageSize, readEntry->physicalPage, currentThread->stackId);
   if(!readEntry->valid){
     printf("Trying to access invalid page vpn %d ppn %d stackId %d\n", vaddr/PageSize, readEntry->physicalPage, currentThread->stackId);
     interrupt->Halt();
     return;
   }
   IntStatus oldLevel = interrupt->SetLevel(IntOff);
+  
+  ipt[machine->tlb[currentTLBIndex].physicalPage].dirty = machine->tlb[currentTLBIndex].dirty;
+  ipt[machine->tlb[currentTLBIndex].physicalPage].use = machine->tlb[currentTLBIndex].use;
+  
   machine->tlb[currentTLBIndex].physicalPage = readEntry->physicalPage;
-  printf("Virtual page number: %d Physical page number: %d\n", vaddr/PageSize, machine->tlb[currentTLBIndex].physicalPage);
   machine->tlb[currentTLBIndex].virtualPage = readEntry->virtualPage;
   machine->tlb[currentTLBIndex].valid = true;
   machine->tlb[currentTLBIndex].readOnly = readEntry->readOnly;
   machine->tlb[currentTLBIndex].dirty = readEntry->dirty;
-  //machine->tlb[currentTLBIndex].use = true;
+  machine->tlb[currentTLBIndex].use = readEntry->use;
   currentTLBIndex = (currentTLBIndex + 1)%4;
   interrupt->SetLevel(oldLevel);
 }

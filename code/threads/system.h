@@ -18,6 +18,7 @@
 #include "bitmap.h"
 #include "synch.h"
 #include "table.h"
+#include "iptentry.h"
 
 struct KernelLock {
     Lock* lock;
@@ -55,6 +56,7 @@ extern Timer *timer;				// the hardware alarm clock
 
 extern BitMap memoryMap;
 extern Lock *memoryMapLock;
+extern IPTEntry* ipt;
 
 extern Table processTable;
 extern Lock *processTableLock;

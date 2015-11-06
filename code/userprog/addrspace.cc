@@ -122,9 +122,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
     KernelProcess *kp;
     stackMapLock = new Lock("Stack map lock");
     pageTableLock = new Lock("Page table lock");
-    stackMapLock->Acquire();
-    stackMap.Find();  //Finding space for the the first stack
-    stackMapLock->Release();
+
     // Don't allocate the input or output to disk files
     fileTable.Put(0);
     fileTable.Put(0);
@@ -155,7 +153,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
     pageTableLock->Acquire();
     pageTable = new TranslationEntry[numCodePages + numStackPages];
     for (i = 0; i < numCodePages + numStackPages; i++) {
-    	pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
+    	pageTable[i].virtualPage = i;	
         if(i < numCodePages + 8) {
             memoryMapLock->Acquire();
             int index = memoryMap.Find();
@@ -167,7 +165,10 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
             }
             pageTable[i].physicalPage = index;
             pageTable[i].valid = TRUE;
-            currentThread->stackId = 0;
+            ipt[index].space = this;
+            ipt[index].virtualPage = i;
+            ipt[index].physicalPage = index;
+            ipt[index].valid = TRUE;
         }
         else{
             pageTable[i].valid = FALSE;
@@ -257,6 +258,9 @@ AddrSpace::~AddrSpace()
 void
 AddrSpace::InitRegisters()
 {
+    stackMapLock->Acquire();
+    currentThread->stackId = stackMap.Find();  //Finding space for the the first stack
+    stackMapLock->Release();
     int i;
 
     for (i = 0; i < NumTotalRegs; i++)
@@ -273,7 +277,7 @@ AddrSpace::InitRegisters()
    // allocated the stack; but subtract off a bit, to make sure we don't
    // accidentally reference off the end!
    machine->WriteRegister(StackReg, numPages * PageSize - 16);
-   DEBUG('a', "Initializing stack register to %x\n", numPages * PageSize - 16);
+   DEBUG('a', "Initializing stack register to %d\n", numPages * PageSize - 16);
 }
 
 //----------------------------------------------------------------------
@@ -303,6 +307,7 @@ void AddrSpace::SaveState()
 
 void AddrSpace::RestoreState() 
 {
+    DEBUG('c', "Restoring State and clearing TLB stack ID: %d\n", currentThread->stackId);
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     for(int i = 0; i < 4; i++){
         machine->tlb[i].valid = FALSE;
@@ -314,6 +319,7 @@ void AddrSpace::RestoreState()
 }
 
 void AddrSpace::AllocateStack(int stackID) {
+    DEBUG('c', "Allocating stack %d\n", stackID);
     memoryMapLock->Acquire();
     for(int i = numCodePages + stackID*8; i < numCodePages + (stackID+1)*8; i++) {
         int index = memoryMap.Find();
@@ -322,30 +328,37 @@ void AddrSpace::AllocateStack(int stackID) {
             memoryMapLock->Release();
             ASSERT(false);
         }
+        pageTable[i].virtualPage = i;
         pageTable[i].physicalPage = index;
         pageTable[i].valid = TRUE;
+        ipt[index].space = this;
+        ipt[index].virtualPage = i;
+        ipt[index].physicalPage = index;
+        ipt[index].valid = TRUE;
     }
         memoryMapLock->Release();
 
 }
 
 void AddrSpace::DeallocateStack(int stackID) {
-    stackMapLock->Acquire();
-    stackMap.Clear(stackID);
-
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
     for(int i = numCodePages + stackID*8; i < numCodePages + (stackID+1)*8; i++) {
         DeallocatePage(i);
     }
+    stackMapLock->Acquire();
+    stackMap.Clear(stackID);
     stackMapLock->Release();
+    interrupt->SetLevel(oldLevel);
 
 }
 
 void AddrSpace::DeallocatePage(int pageNo) {
-    printf("deallocating virtual page %d in stackId %d \n", pageNo, currentThread->stackId );
+    DEBUG('c', "Deallocating virtual page %d in stackId %d \n", pageNo, currentThread->stackId );
     memoryMapLock->Acquire();
     int index = pageTable[pageNo].physicalPage;
     memoryMap.Clear(index);
     bzero(&machine->mainMemory[index*PageSize], PageSize);
     pageTable[pageNo].valid = FALSE;
+    ipt[index].valid = FALSE;
     memoryMapLock->Release();
 }

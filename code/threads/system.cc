@@ -32,6 +32,7 @@ BitMap conditionMap(numConditions);
 
 Lock *memoryMapLock;
 BitMap memoryMap(NumPhysPages);
+IPTEntry* ipt;
 
 Table processTable(maxProcesses);
 Lock *processTableLock;
@@ -169,6 +170,8 @@ Initialize(int argc, char **argv)
     conditionTableLock = new Lock("Condition Table Lock");
 
     processTableLock = new Lock("Process Table Lock");
+
+    ipt = new IPTEntry[NumPhysPages];
     // We didn't explicitly allocate the current thread we are running in.
     // But if it ever tries to give up the CPU, we better have a Thread
     // object to save its state. 
@@ -231,6 +234,7 @@ Cleanup()
     delete []  conditionTable;
     delete conditionTableLock;
 
+    delete [] ipt;
 
     
     Exit(0);
