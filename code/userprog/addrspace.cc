@@ -56,7 +56,7 @@ int Table::Put(void *f) {
     lock->Release();
     if ( i != -1)
        table[i] = f;
-   return i;
+   return i; 
 }
 
 void *Table::Remove(int i) {
@@ -116,7 +116,14 @@ SwapHeader (NoffHeader *noffH)
 //      constructed set to false.
 //----------------------------------------------------------------------
 
-AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(numStacks) {
+AddrSpace::AddrSpace(char* filename) : fileTable(MaxOpenFiles), stackMap(numStacks) {
+
+    executable = fileSystem->Open(filename);
+    if (executable == NULL) {
+        DEBUG('a', "Unable to open execuatble file %s\n", filename);
+        return;
+    }
+
     NoffHeader noffH;
     unsigned int i, size;
     KernelProcess *kp;
@@ -151,34 +158,50 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
        numCodePages + numStackPages, size);
 // first, set up the translation 
     pageTableLock->Acquire();
-    pageTable = new TranslationEntry[numCodePages + numStackPages];
+    pageTable = new PTEntry[numCodePages + numStackPages];
     for (i = 0; i < numCodePages + numStackPages; i++) {
     	pageTable[i].virtualPage = i;	
-        if(i < numCodePages + 8) {
-            memoryMapLock->Acquire();
-            int index = memoryMap.Find();
-            //printf("MemoryMap index %d\n", index);
-            memoryMapLock->Release();
-            if(index == -1) {
-                printf("Not enough space in memory for another process\n");
-                ASSERT(FALSE);
-            }
-            pageTable[i].physicalPage = index;
-            pageTable[i].valid = TRUE;
-            ipt[index].space = this;
-            ipt[index].virtualPage = i;
-            ipt[index].physicalPage = index;
-            ipt[index].valid = TRUE;
+        if(i < numCodePages) {
+        //     memoryMapLock->Acquire();
+        //     int index = memoryMap.Find();
+        //     //printf("MemoryMap index %d\n", index);
+        //     memoryMapLock->Release();
+        //     if(index == -1) {
+        //         printf("Not enough space in memory for another process\n");
+        //         ASSERT(FALSE);
+        //     }
+        //     pageTable[i].physicalPage = index;
+        //     pageTable[i].valid = TRUE;
+        //     ipt[index].space = this;
+        //     ipt[index].virtualPage = i;
+        //     ipt[index].physicalPage = index;
+        //     ipt[index].valid = TRUE;
+            pageTable[i].inExecutable = TRUE;
+            pageTable[i].byteOffset = i*PageSize + noffH.code.inFileAddr;
+
         }
         else{
+
+            pageTable[i].inExecutable = FALSE;
+
+
+        }
+
+        if(i < numCodePages + 8){
+            pageTable[i].valid = TRUE;
+
+        }else{
             pageTable[i].valid = FALSE;
         }
-        //pageTable[i].use = FALSE;
+        pageTable[i].onDisk = FALSE;        
+        pageTable[i].use = FALSE;
+        pageTable[i].inMemory = FALSE;
         pageTable[i].dirty = FALSE;
     	pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
     					// a separate page, we could set its 
     					// pages to be read-only
     }
+
     //Add the new process to the process table
     processTableLock->Acquire();
     numProcesses++;
@@ -197,6 +220,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
 //  bzero(machine->mainMemory, size);
 
 // then, copy in the code and data segments into memory
+    /*
     int initPages = divRoundUp(noffH.code.size + noffH.initData.size, PageSize);
     for(int j = 0; j < initPages; j++) {
         DEBUG('c', "Initializing code/initdata page, at 0x%x, size %d\n", 
@@ -210,19 +234,7 @@ AddrSpace::AddrSpace(OpenFile *executable) : fileTable(MaxOpenFiles), stackMap(n
                 PageSize, noffH.code.inFileAddr + j*PageSize);
         }
     }
-    /*if (noffH.code.size > 0) {
-        DEBUG('a', "Initializing code segment, at 0x%x, size %d\n", 
-			pageTable[noffH.code.virtualAddr/PageSize].physicalPage * PageSize, noffH.code.size);
-        executable->ReadAt(&(machine->mainMemory[pageTable[noffH.code.virtualAddr].physicalPage * PageSize]),
-			noffH.code.size, noffH.code.inFileAddr);
-    }
-    if (noffH.initData.size > 0) {
-        DEBUG('a', "Initializing data segment, at 0x%x, size %d\n", 
-			pageTable[noffH.initData.virtualAddr/PageSize].physicalPage * PageSize, noffH.initData.size);
-        executable->ReadAt(&(machine->mainMemory[pageTable[noffH.initData.virtualAddr].physicalPage * PageSize + noffH.code.size]),
-			noffH.initData.size, noffH.initData.inFileAddr);
-    }
-    */
+*/
     pageTableLock->Release();
 
 }
@@ -241,6 +253,7 @@ AddrSpace::~AddrSpace()
             DeallocatePage(i);
         }
     }
+    delete executable;
     delete pageTable;
     delete stackMapLock;
 }
@@ -320,23 +333,26 @@ void AddrSpace::RestoreState()
 
 void AddrSpace::AllocateStack(int stackID) {
     DEBUG('c', "Allocating stack %d\n", stackID);
-    memoryMapLock->Acquire();
+    // memoryMapLock->Acquire();
     for(int i = numCodePages + stackID*8; i < numCodePages + (stackID+1)*8; i++) {
-        int index = memoryMap.Find();
-        if(index == -1) {
-            printf("Not enough physical memory for another thread stack\n");
-            memoryMapLock->Release();
-            ASSERT(false);
-        }
+        // int index = memoryMap.Find();
+        // if(index == -1) {
+        //     printf("Not enough physical memory for another thread stack\n");
+        //     memoryMapLock->Release();
+        //     ASSERT(false);
+        // }
         pageTable[i].virtualPage = i;
-        pageTable[i].physicalPage = index;
+        // pageTable[i].physicalPage = index;
         pageTable[i].valid = TRUE;
-        ipt[index].space = this;
-        ipt[index].virtualPage = i;
-        ipt[index].physicalPage = index;
-        ipt[index].valid = TRUE;
+        pageTable[i].inMemory = FALSE;
+        pageTable[i].onDisk = FALSE;
+        pageTable[i].inExecutable = FALSE;
+        // ipt[index].space = this;
+        // ipt[index].virtualPage = i;
+        // ipt[index].physicalPage = index;
+        // ipt[index].valid = TRUE;
     }
-        memoryMapLock->Release();
+        // memoryMapLock->Release();
 
 }
 
@@ -354,11 +370,11 @@ void AddrSpace::DeallocateStack(int stackID) {
 
 void AddrSpace::DeallocatePage(int pageNo) {
     DEBUG('c', "Deallocating virtual page %d in stackId %d \n", pageNo, currentThread->stackId );
-    memoryMapLock->Acquire();
-    int index = pageTable[pageNo].physicalPage;
-    memoryMap.Clear(index);
-    bzero(&machine->mainMemory[index*PageSize], PageSize);
+    // memoryMapLock->Acquire();
+    // int index = pageTable[pageNo].physicalPage;
+    // memoryMap.Clear(index);
+    // bzero(&machine->mainMemory[index*PageSize], PageSize);
     pageTable[pageNo].valid = FALSE;
-    ipt[index].valid = FALSE;
-    memoryMapLock->Release();
+    // ipt[index].valid = FALSE;
+    // memoryMapLock->Release();
 }

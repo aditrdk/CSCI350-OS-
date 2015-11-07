@@ -16,6 +16,7 @@
 #include "copyright.h"
 #include "filesys.h"
 #include "table.h"
+#include "ptentry.h"
 
 #define UserStackSize		1024 	// increase this as necessary!
 #define numStacks 100
@@ -24,7 +25,7 @@
 
 class AddrSpace {
   public:
-    AddrSpace(OpenFile *executable);	// Create an address space,
+    AddrSpace(char* filename);	// Create an address space,
 					// initializing it with the program
 					// stored in the file "executable"
     ~AddrSpace();			// De-allocate an address space
@@ -45,10 +46,11 @@ class AddrSpace {
     BitMap stackMap;
     int tableIndex;
     Lock *pageTableLock;
-    TranslationEntry *pageTable;   // Assume linear page table translation
+    PTEntry *pageTable; 
+    OpenFile* executable;
  private:
    
-					// for now!
+
     unsigned int numPages;      // Number of pages of code, init, and uninit in the virtual 
                     // address space
 

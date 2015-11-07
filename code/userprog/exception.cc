@@ -1,4 +1,4 @@
-// exception.cc 
+   // exception.cc 
 //	Entry point into the Nachos kernel from user programs.
 //	There are two kinds of things that can cause control to
 //	transfer back to here from user code:
@@ -28,6 +28,7 @@
 #include <iostream>
 #include <stdlib.h>
 
+extern "C" { int bzero(char *, int); };
 using namespace std;
 
 int copyin(unsigned int vaddr, int len, char *buf) {
@@ -340,7 +341,7 @@ void DestroyCondition_Syscall(int index){
 }
 
 void Exit_Syscall(int status) {
-  DEBUG('a', "Exit status: %d\n", status);
+  DEBUG('e', "Exit status: %d\n", status);
   KernelProcess *kp;
   kp = (KernelProcess*)processTable.Get(currentThread->space->tableIndex);
   processTableLock->Acquire();
@@ -788,6 +789,7 @@ int Exec_Syscall(unsigned int vaddr, int len){
 
   if ( !(buf = new char[len]) ) {
     DEBUG('a', "%s","Error allocating kernel buffer for write!\n");
+    delete[] buf;
     return -1;
   } else {
     if ( copyin(vaddr,len,buf) == -1 ) {
@@ -796,21 +798,15 @@ int Exec_Syscall(unsigned int vaddr, int len){
       return -1;
     }
   }
-  OpenFile *executable = fileSystem->Open(buf);
-  AddrSpace *space;
 
-  if (executable == NULL) {
-    DEBUG('a', "Unable to open execuatble file %s\n", buf);
-    delete[] buf;
-    return -1;
-  }
+  AddrSpace *space = new AddrSpace(buf);
   delete[] buf;
 
-  space = new AddrSpace(executable);
+  if (space == NULL) {
+    DEBUG('a', "Unable to open executable file %s\n", buf);
+    return -1;
+  }
 
-  delete executable;      // close file
-
-  //space->InitRegisters();   // set the initial register values
   Thread* mainThread = new Thread("Main Thread");
   mainThread->space = space;
   mainThread->Fork(mainProcessThread, 0);
@@ -841,27 +837,85 @@ int ReadInt_Syscall(int min, int max) {
   return userChoice;
 }
 
+int HandleFullMemory(){
+  
+}
+
+
+int HandleIPTMiss(int vpn){
+
+  PTEntry* readEntry = &currentThread->space->pageTable[vpn];
+  DEBUG('c', "IPT MISS - Virtual page number: %d Physical page number: %d StackID: %d\n", vpn, readEntry->physicalPage, currentThread->stackId);
+
+  if(readEntry->valid == FALSE){
+    printf("Page table entry is invalid. vpn: %d\n", vpn);
+    return -1;
+  }
+  if(readEntry->inMemory){
+        printf("Error: Page table entry is in memory but not in IPT. vpn: %d ppn: %d\n", vpn, readEntry->physicalPage);
+        return readEntry->physicalPage;
+
+  }
+  //not in memory. need to read into memory
+
+  memoryMapLock->Acquire();
+  int index = memoryMap.Find();
+  if(index == -1){
+    //Not Enough space in memory
+    index = HandleFullMemory();
+  }
+
+
+  if(readEntry->onDisk){
+    //Read From Swap File
+
+  }else if(readEntry->inExecutable){
+    //Read from executable
+    currentThread->space->executable->ReadAt(&(machine->mainMemory[index*PageSize]), PageSize, readEntry->byteOffset);
+
+  }else{
+    //Nothing to read
+    bzero(&machine->mainMemory[index*PageSize], PageSize);
+
+  }
+  readEntry->physicalPage = index;
+  readEntry->inMemory = TRUE;
+  ipt[index].virtualPage = vpn;
+  ipt[index].valid = TRUE;
+  ipt[index].space = currentThread->space;
+  ipt[index].physicalPage = index; 
+  memoryMapLock->Release();
+  return index;
+}
+
 void HandlePageFault(int vaddr) {
+
   int physPage = -1;
+  int vpn = vaddr/PageSize;
+  DEBUG('c', "TLB MISS - Virtual page number: %d StackID: %d\n", vpn, currentThread->stackId);
+
   for(int i = 0; i < NumPhysPages; i++){
-    if(ipt[i].space == currentThread->space && ipt[i].virtualPage == vaddr/PageSize){
+    if(ipt[i].space == currentThread->space && ipt[i].virtualPage == vpn && ipt[i].valid){
      physPage = i;
      break;
    }
+  } 
+  if(physPage == -1){
+    physPage = HandleIPTMiss(vpn);
+    if(physPage == -1){
+      printf("Failed to load page vpn %d ppn %d stackId %d\n", vpn, physPage, currentThread->stackId);
+      interrupt->Halt(); 
+      return;
+    }
   }
   IPTEntry* readEntry = &ipt[physPage];
-  printf("Virtual page number: %d Physical page number: %d StackID: %d\n", vaddr/PageSize, readEntry->physicalPage, currentThread->stackId);
-  if(!readEntry->valid){
-    printf("Trying to access invalid page vpn %d ppn %d stackId %d\n", vaddr/PageSize, readEntry->physicalPage, currentThread->stackId);
-    interrupt->Halt();
-    return;
-  }
+ 
   IntStatus oldLevel = interrupt->SetLevel(IntOff);
   
   ipt[machine->tlb[currentTLBIndex].physicalPage].dirty = machine->tlb[currentTLBIndex].dirty;
   ipt[machine->tlb[currentTLBIndex].physicalPage].use = machine->tlb[currentTLBIndex].use;
   
-  machine->tlb[currentTLBIndex].physicalPage = readEntry->physicalPage;
+  machine->tlb[currentTLBIndex].physicalPage = physPage;
   machine->tlb[currentTLBIndex].virtualPage = readEntry->virtualPage;
   machine->tlb[currentTLBIndex].valid = true;
   machine->tlb[currentTLBIndex].readOnly = readEntry->readOnly;
