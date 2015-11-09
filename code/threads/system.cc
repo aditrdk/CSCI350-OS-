@@ -40,6 +40,14 @@ int numProcesses = 0;
 
 int currentTLBIndex = 0;
 
+OpenFile* swapFile;
+BitMap swapFileMap(2000);
+Lock* swapFileLock;
+bool RAND_REPLACEMENT = false;
+
+int* pageIndices;
+List* pageQueue;
+
 #ifdef FILESYS_NEEDED
 FileSystem  *fileSystem;
 #endif
@@ -180,6 +188,17 @@ Initialize(int argc, char **argv)
 
     interrupt->Enable();
     CallOnUserAbort(Cleanup);			// if user hits ctl-C
+
+    swapFileLock = new Lock("Swap File Lock");
+    swapFile = fileSystem->Open("swapfile");
+    if (swapFile == NULL) {
+        DEBUG('a', "Unable to open swap file %s\n", "filename");
+        Exit(-1);
+    }
+
+    pageIndices = new int[NumPhysPages];
+    for(int i = 0; i < NumPhysPages; i++) pageIndices[i] = i;
+    pageQueue = new List;
     
 #ifdef USER_PROGRAM
     machine = new Machine(debugUserProg);	// this must come first
@@ -236,6 +255,11 @@ Cleanup()
 
     delete [] ipt;
 
+    delete swapFileLock;
+    delete swapFile;
+
+    delete pageIndices;
+    delete pageQueue;
     
     Exit(0);
 }

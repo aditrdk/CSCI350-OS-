@@ -141,41 +141,28 @@ AddrSpace::AddrSpace(char* filename) : fileTable(MaxOpenFiles), stackMap(numStac
     ASSERT(noffH.noffMagic == NOFFMAGIC);
 
     size = noffH.code.size + noffH.initData.size + noffH.uninitData.size ;
-    numPages = divRoundUp(size, PageSize) + divRoundUp(UserStackSize, PageSize);
 
     numCodePages = divRoundUp(size, PageSize) ;
     numStackPages = divRoundUp(UserStackSize*numStacks,PageSize);
                                                 // we need to increase the size
 						// to leave room for the stack
-    size = (numCodePages + numStackPages) * PageSize;
+    numPages = numCodePages+numStackPages;
 
-    ASSERT(numPages <= NumPhysPages);		// check we're not trying
+    size = (numPages) * PageSize;
+
+    //ASSERT(numPages <= NumPhysPages);		// check we're not trying
 						// to run anything too big --
 						// at least until we have
 						// virtual memory
 
     DEBUG('c', "Initializing address space, num total pages %d, size %d\n", 
-       numCodePages + numStackPages, size);
+       numPages, size);
 // first, set up the translation 
     pageTableLock->Acquire();
-    pageTable = new PTEntry[numCodePages + numStackPages];
-    for (i = 0; i < numCodePages + numStackPages; i++) {
+    pageTable = new PTEntry[numPages];
+    for (i = 0; i < numPages; i++) {
     	pageTable[i].virtualPage = i;	
         if(i < numCodePages) {
-        //     memoryMapLock->Acquire();
-        //     int index = memoryMap.Find();
-        //     //printf("MemoryMap index %d\n", index);
-        //     memoryMapLock->Release();
-        //     if(index == -1) {
-        //         printf("Not enough space in memory for another process\n");
-        //         ASSERT(FALSE);
-        //     }
-        //     pageTable[i].physicalPage = index;
-        //     pageTable[i].valid = TRUE;
-        //     ipt[index].space = this;
-        //     ipt[index].virtualPage = i;
-        //     ipt[index].physicalPage = index;
-        //     ipt[index].valid = TRUE;
             pageTable[i].inExecutable = TRUE;
             pageTable[i].byteOffset = i*PageSize + noffH.code.inFileAddr;
 
@@ -289,8 +276,8 @@ AddrSpace::InitRegisters()
    // Set the stack register to the end of the address space, where we
    // allocated the stack; but subtract off a bit, to make sure we don't
    // accidentally reference off the end!
-   machine->WriteRegister(StackReg, numPages * PageSize - 16);
-   DEBUG('a', "Initializing stack register to %d\n", numPages * PageSize - 16);
+   machine->WriteRegister(StackReg, (numCodePages+8) * PageSize - 16);
+   DEBUG('a', "Initializing stack register to %d\n", (numCodePages+8) * PageSize - 16);
 }
 
 //----------------------------------------------------------------------
@@ -305,6 +292,9 @@ void AddrSpace::SaveState()
 {
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     for(int i = 0; i < 4; i++){
+        if(machine->tlb[i].valid && machine->tlb[i].dirty){
+            ipt[machine->tlb[i].physicalPage].dirty = true;
+        }
         machine->tlb[i].valid = FALSE;
     }
     interrupt->SetLevel(oldLevel);
@@ -323,6 +313,9 @@ void AddrSpace::RestoreState()
     DEBUG('c', "Restoring State and clearing TLB stack ID: %d\n", currentThread->stackId);
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     for(int i = 0; i < 4; i++){
+        if(machine->tlb[i].valid && machine->tlb[i].dirty){
+            ipt[machine->tlb[i].physicalPage].dirty = true;
+        }
         machine->tlb[i].valid = FALSE;
     }
     interrupt->SetLevel(oldLevel);
@@ -370,11 +363,16 @@ void AddrSpace::DeallocateStack(int stackID) {
 
 void AddrSpace::DeallocatePage(int pageNo) {
     DEBUG('c', "Deallocating virtual page %d in stackId %d \n", pageNo, currentThread->stackId );
-    // memoryMapLock->Acquire();
-    // int index = pageTable[pageNo].physicalPage;
-    // memoryMap.Clear(index);
+
     // bzero(&machine->mainMemory[index*PageSize], PageSize);
+    memoryMapLock->Acquire();
     pageTable[pageNo].valid = FALSE;
-    // ipt[index].valid = FALSE;
-    // memoryMapLock->Release();
+    for(int i = 0; i < NumPhysPages; i++){
+        if(ipt[i].space == this && ipt[i].virtualPage == pageNo && ipt[i].valid){
+            ipt[i].valid = FALSE;
+            int index = pageTable[pageNo].physicalPage;
+            memoryMap.Clear(index);
+        }
+    } 
+    memoryMapLock->Release();
 }

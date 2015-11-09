@@ -48,10 +48,11 @@ class AddrSpace {
     Lock *pageTableLock;
     PTEntry *pageTable; 
     OpenFile* executable;
+    unsigned int numPages;      // Number of pages of code, init, and uninit in the virtual 
+
  private:
    
 
-    unsigned int numPages;      // Number of pages of code, init, and uninit in the virtual 
                     // address space
 
 };

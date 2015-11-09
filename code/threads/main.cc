@@ -96,6 +96,21 @@ main(int argc, char **argv)
         if (!strcmp(*argv, "-z"))               // print copyright
             printf (copyright);
 
+        if (!strcmp(*argv, "-P")){
+        	printf("Page Replacement policy: ");
+        	if(!strcmp(*(argv + 1), "RAND")) {
+        		RAND_REPLACEMENT = true;
+	        	printf(" Random\n");
+
+        	}else {
+        		RAND_REPLACEMENT = false;
+	        	printf(" FIFO\n");
+
+        	}
+        	argCount = 2;
+
+        }
+
 #ifdef THREADS
 		if (!strcmp(*argv, "-T"))               // Test Suite
 		    TestSuite();
@@ -108,38 +123,38 @@ main(int argc, char **argv)
             StartProcess(*(argv + 1));
             argCount = 2;
         } else if (!strcmp(*argv, "-c")) {      // test the console
-	    if (argc == 1)
-	        ConsoleTest(NULL, NULL);
-	    else {
-		ASSERT(argc > 2);
-	        ConsoleTest(*(argv + 1), *(argv + 2));
-	        argCount = 3;
-	    }
-	    interrupt->Halt();		// once we start the console, then 
-					// Nachos will loop forever waiting 
-					// for console input
-	}
+		    if (argc == 1)
+		        ConsoleTest(NULL, NULL);
+		    else {
+			ASSERT(argc > 2);
+		        ConsoleTest(*(argv + 1), *(argv + 2));
+		        argCount = 3;
+		    }
+		    interrupt->Halt();		// once we start the console, then 
+						// Nachos will loop forever waiting 
+						// for console input
+		}
 #endif // USER_PROGRAM
 #ifdef FILESYS
-	if (!strcmp(*argv, "-cp")) { 		// copy from UNIX to Nachos
-	    ASSERT(argc > 2);
-	    Copy(*(argv + 1), *(argv + 2));
-	    argCount = 3;
-	} else if (!strcmp(*argv, "-p")) {	// print a Nachos file
-	    ASSERT(argc > 1);
-	    Print(*(argv + 1));
-	    argCount = 2;
-	} else if (!strcmp(*argv, "-r")) {	// remove Nachos file
-	    ASSERT(argc > 1);
-	    fileSystem->Remove(*(argv + 1));
-	    argCount = 2;
-	} else if (!strcmp(*argv, "-l")) {	// list Nachos directory
-            fileSystem->List();
-	} else if (!strcmp(*argv, "-D")) {	// print entire filesystem
-            fileSystem->Print();
-	} else if (!strcmp(*argv, "-t")) {	// performance test
-            PerformanceTest();
-	}
+		if (!strcmp(*argv, "-cp")) { 		// copy from UNIX to Nachos
+		    ASSERT(argc > 2);
+		    Copy(*(argv + 1), *(argv + 2));
+		    argCount = 3;
+		} else if (!strcmp(*argv, "-p")) {	// print a Nachos file
+		    ASSERT(argc > 1);
+		    Print(*(argv + 1));
+		    argCount = 2;
+		} else if (!strcmp(*argv, "-r")) {	// remove Nachos file
+		    ASSERT(argc > 1);
+		    fileSystem->Remove(*(argv + 1));
+		    argCount = 2;
+		} else if (!strcmp(*argv, "-l")) {	// list Nachos directory
+	            fileSystem->List();
+		} else if (!strcmp(*argv, "-D")) {	// print entire filesystem
+	            fileSystem->Print();
+		} else if (!strcmp(*argv, "-t")) {	// performance test
+	            PerformanceTest();
+		}
 #endif // FILESYS
 #ifdef NETWORK
         if (!strcmp(*argv, "-o")) {

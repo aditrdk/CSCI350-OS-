@@ -375,11 +375,14 @@ void Exit_Syscall(int status) {
     currentThread->space->DeallocateStack(currentThread->stackId);
     processTableLock->Release();
   }
-    IntStatus oldLevel = interrupt->SetLevel(IntOff);
-    for(int i = 0; i < 4; i++){
-        machine->tlb[i].valid = FALSE;
-    }
-    interrupt->SetLevel(oldLevel);
+    // IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    // for(int i = 0; i < 4; i++){
+    //     if(machine->tlb[i].dirty){
+    //         ipt[machine->tlb[i].physicalPage].dirty = true;
+    //     }
+    //     machine->tlb[i].valid = FALSE;
+    // }
+    // interrupt->SetLevel(oldLevel);
   currentThread->Finish();
 }
 
@@ -838,12 +841,61 @@ int ReadInt_Syscall(int min, int max) {
 }
 
 int HandleFullMemory(){
-  
+  IntStatus oldLevel = interrupt->SetLevel(IntOff);
+
+  int evictIndex;
+  if(RAND_REPLACEMENT){
+    evictIndex = rand()%NumPhysPages;
+  }else{
+    evictIndex = *((int*)pageQueue->Remove());
+  }
+
+  //Removing a page that could be in TLB
+  for(int i = 0; i < 4; i++){
+    if(machine->tlb[i].valid && machine->tlb[i].physicalPage == evictIndex){
+      if(machine->tlb[i].dirty){
+        ipt[evictIndex].dirty = TRUE;
+      }
+      machine->tlb[i].valid = FALSE;
+    }
+  }
+  int vpn = ipt[evictIndex].virtualPage;
+  //Update evited page's space's pagetable
+  ipt[evictIndex].space->pageTable[vpn].inMemory = FALSE;
+  DEBUG('c', "Evicting vpn: %d, ppn: %d \n", vpn, evictIndex);
+  if(ipt[evictIndex].dirty || ipt[evictIndex].space->pageTable[vpn].dirty){
+
+    //Need to write to swap file
+    swapFileLock->Acquire();
+    int swapIndex = swapFileMap.Find();
+    if(swapIndex == -1){
+      printf("ERROR swapfile map out of space");
+      interrupt->SetLevel(oldLevel);
+      swapFileLock->Release();
+      return -1;
+    }
+    DEBUG('c', "Writing evicted page vpn: %d, ppn: %d, to swap file page %d \n", vpn, evictIndex, swapIndex);
+    swapFile->WriteAt(&machine->mainMemory[evictIndex*PageSize], PageSize, swapIndex*PageSize);
+    ipt[evictIndex].space->pageTable[vpn].dirty = TRUE;
+    ipt[evictIndex].space->pageTable[vpn].onDisk = TRUE;
+    ipt[evictIndex].space->pageTable[vpn].byteOffset = swapIndex*PageSize;
+
+
+    swapFileLock->Release();
+  }
+
+  interrupt->SetLevel(oldLevel);
+  return evictIndex;
+
+
 }
 
 
 int HandleIPTMiss(int vpn){
-
+  if(vpn < 0 || vpn >= currentThread->space->numPages){
+    printf("Virtual page requested is not within bounds. vpn: %d\n", vpn);
+    return -1;
+  }
   PTEntry* readEntry = &currentThread->space->pageTable[vpn];
   DEBUG('c', "IPT MISS - Virtual page number: %d Physical page number: %d StackID: %d\n", vpn, readEntry->physicalPage, currentThread->stackId);
 
@@ -864,13 +916,24 @@ int HandleIPTMiss(int vpn){
     //Not Enough space in memory
     index = HandleFullMemory();
   }
-
+   readEntry = &currentThread->space->pageTable[vpn];
 
   if(readEntry->onDisk){
     //Read From Swap File
+      DEBUG('c', "Reading from Swap File - Virtual page number: %d to ppn: %d Swap Page: %d \n", vpn,  index, readEntry->byteOffset/PageSize);
+
+    swapFileLock->Acquire();
+    int result = swapFile->ReadAt(&(machine->mainMemory[index*PageSize]), PageSize, readEntry->byteOffset);
+    if(result == -1){
+      printf("Error reading from swap file\n");
+    }
+    swapFileMap.Clear(readEntry->byteOffset/PageSize);
+
+    swapFileLock->Release();
 
   }else if(readEntry->inExecutable){
     //Read from executable
+    DEBUG('c', "Reading from Executable File - Virtual page number: %d to ppn: %d ByteOffset: %d \n", vpn,  index, readEntry->byteOffset);
     currentThread->space->executable->ReadAt(&(machine->mainMemory[index*PageSize]), PageSize, readEntry->byteOffset);
 
   }else{
@@ -878,10 +941,13 @@ int HandleIPTMiss(int vpn){
     bzero(&machine->mainMemory[index*PageSize], PageSize);
 
   }
+  pageQueue->Append(&pageIndices[index]);
   readEntry->physicalPage = index;
   readEntry->inMemory = TRUE;
+  readEntry->onDisk = FALSE;
   ipt[index].virtualPage = vpn;
   ipt[index].valid = TRUE;
+  ipt[index].dirty = readEntry->dirty;
   ipt[index].space = currentThread->space;
   ipt[index].physicalPage = index; 
   memoryMapLock->Release();
@@ -889,10 +955,11 @@ int HandleIPTMiss(int vpn){
 }
 
 void HandlePageFault(int vaddr) {
+  IntStatus oldLevel = interrupt->SetLevel(IntOff);
 
   int physPage = -1;
   int vpn = vaddr/PageSize;
-  DEBUG('c', "TLB MISS - Virtual page number: %d StackID: %d\n", vpn, currentThread->stackId);
+  //DEBUG('c', "TLB MISS - Virtual page number: %d StackID: %d\n", vpn, currentThread->stackId);
 
   for(int i = 0; i < NumPhysPages; i++){
     if(ipt[i].space == currentThread->space && ipt[i].virtualPage == vpn && ipt[i].valid){
@@ -910,14 +977,13 @@ void HandlePageFault(int vaddr) {
   }
   IPTEntry* readEntry = &ipt[physPage];
  
-  IntStatus oldLevel = interrupt->SetLevel(IntOff);
   
   ipt[machine->tlb[currentTLBIndex].physicalPage].dirty = machine->tlb[currentTLBIndex].dirty;
   ipt[machine->tlb[currentTLBIndex].physicalPage].use = machine->tlb[currentTLBIndex].use;
   
   machine->tlb[currentTLBIndex].physicalPage = physPage;
   machine->tlb[currentTLBIndex].virtualPage = readEntry->virtualPage;
-  machine->tlb[currentTLBIndex].valid = true;
+  machine->tlb[currentTLBIndex].valid = TRUE;
   machine->tlb[currentTLBIndex].readOnly = readEntry->readOnly;
   machine->tlb[currentTLBIndex].dirty = readEntry->dirty;
   machine->tlb[currentTLBIndex].use = readEntry->use;

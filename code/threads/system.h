@@ -19,7 +19,7 @@
 #include "synch.h"
 #include "table.h"
 #include "iptentry.h"
-
+#include "list.h"
 struct KernelLock {
     Lock* lock;
     AddrSpace *owner;
@@ -74,6 +74,13 @@ extern int numConditions;
 extern Lock* conditionTableLock;
 
 extern int currentTLBIndex;
+
+extern Lock* swapFileLock;
+extern OpenFile* swapFile;
+extern BitMap swapFileMap;
+extern bool RAND_REPLACEMENT;
+extern int* pageIndices;
+extern List* pageQueue;
 
 #ifdef USER_PROGRAM
 #include "machine.h"
