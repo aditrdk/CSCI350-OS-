@@ -27,7 +27,6 @@ Table::Table(int s) : map(s), table(0), lock(0), size(s) {
     table = new void *[size];
     lock = new Lock("TableLock");
 }
-
 Table::~Table() {
     if (table) {
        delete table;
@@ -293,7 +292,7 @@ void AddrSpace::SaveState()
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     for(int i = 0; i < 4; i++){
         if(machine->tlb[i].valid && machine->tlb[i].dirty){
-            ipt[machine->tlb[i].physicalPage].dirty = true;
+            ipt[machine->tlb[i].physicalPage].dirty = TRUE;
         }
         machine->tlb[i].valid = FALSE;
     }
@@ -314,7 +313,7 @@ void AddrSpace::RestoreState()
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     for(int i = 0; i < 4; i++){
         if(machine->tlb[i].valid && machine->tlb[i].dirty){
-            ipt[machine->tlb[i].physicalPage].dirty = true;
+            ipt[machine->tlb[i].physicalPage].dirty = TRUE;
         }
         machine->tlb[i].valid = FALSE;
     }
@@ -354,11 +353,11 @@ void AddrSpace::DeallocateStack(int stackID) {
     for(int i = numCodePages + stackID*8; i < numCodePages + (stackID+1)*8; i++) {
         DeallocatePage(i);
     }
+
     stackMapLock->Acquire();
     stackMap.Clear(stackID);
     stackMapLock->Release();
     interrupt->SetLevel(oldLevel);
-
 }
 
 void AddrSpace::DeallocatePage(int pageNo) {

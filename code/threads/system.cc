@@ -7,6 +7,7 @@
 
 #include "copyright.h"
 #include "system.h"
+#include <sstream>
 #include <stdlib.h>
 #include <time.h>
 
@@ -48,6 +49,8 @@ bool RAND_REPLACEMENT = false;
 int* pageIndices;
 List* pageQueue;
 
+
+
 #ifdef FILESYS_NEEDED
 FileSystem  *fileSystem;
 #endif
@@ -62,6 +65,7 @@ Machine *machine;	// user program memory and registers
 
 #ifdef NETWORK
 PostOffice *postOffice;
+int machineId;
 #endif
 
 
@@ -153,6 +157,7 @@ Initialize(int argc, char **argv)
 	} else if (!strcmp(*argv, "-m")) {
 	    ASSERT(argc > 1);
 	    netname = atoi(*(argv + 1));
+        machineId = netname;
 	    argCount = 2;
 	}
 #endif
@@ -184,17 +189,27 @@ Initialize(int argc, char **argv)
     // But if it ever tries to give up the CPU, we better have a Thread
     // object to save its state. 
     currentThread = new Thread("main");		
-    currentThread->setStatus(RUNNING);
-
-    interrupt->Enable();
+ 
+     interrupt->Enable();
     CallOnUserAbort(Cleanup);			// if user hits ctl-C
 
     swapFileLock = new Lock("Swap File Lock");
+
+    //NEED TO MAKE SWAPFILE NAME HAVE MACHINE ID
+    std::stringstream ss;
+    ss << "swapfile";
+#ifdef NETWORK
+    ss << machineId;
+#endif
+    char* filename = new char[40];
+    ss >> filename;
+    fileSystem->Create(filename, 2048);
     swapFile = fileSystem->Open("swapfile");
     if (swapFile == NULL) {
         DEBUG('a', "Unable to open swap file %s\n", "filename");
         Exit(-1);
     }
+    delete filename;
 
     pageIndices = new int[NumPhysPages];
     for(int i = 0; i < NumPhysPages; i++) pageIndices[i] = i;
