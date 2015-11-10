@@ -31,7 +31,7 @@ CPP = $(GCCDIR)cpp
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt matmult sort testfiles yieldTest lockTest threadsTest execTest conditionTest forkTest printTest multipassportofficeTest passportoffice 2matmult
+all: halt matmult sort testfiles yieldTest lockTest threadsTest execTest conditionTest forkTest printTest networklockTest networkreleaseTest multipassportofficeTest passportoffice networkTest networkconditionTest networksignalTest networkbroadcastTest networkmonitorTest networkgetmonitorTest 2matmult
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.s > strt.s
@@ -91,6 +91,54 @@ printTest.o: printTest.c
 printTest: printTest.o start.o
 	$(LD) $(LDFLAGS) start.o printTest.o -o printTest.coff
 	../bin/coff2noff printTest.coff printTest
+
+networkTest.o: networkTest.c
+	$(CC) $(CFLAGS) -c networkTest.c
+networkTest: networkTest.o start.o
+	$(LD) $(LDFLAGS) start.o networkTest.o -o networkTest.coff
+	../bin/coff2noff networkTest.coff networkTest
+
+networklockTest.o: networklockTest.c
+	$(CC) $(CFLAGS) -c networklockTest.c
+networklockTest: networklockTest.o start.o
+	$(LD) $(LDFLAGS) start.o networklockTest.o -o networklockTest.coff
+	../bin/coff2noff networklockTest.coff networklockTest
+
+networkreleaseTest.o: networkreleaseTest.c
+	$(CC) $(CFLAGS) -c networkreleaseTest.c
+networkreleaseTest: networkreleaseTest.o start.o
+	$(LD) $(LDFLAGS) start.o networkreleaseTest.o -o networkreleaseTest.coff
+	../bin/coff2noff networkreleaseTest.coff networkreleaseTest
+
+networksignalTest.o: networksignalTest.c
+	$(CC) $(CFLAGS) -c networksignalTest.c
+networksignalTest: networksignalTest.o start.o
+	$(LD) $(LDFLAGS) start.o networksignalTest.o -o networksignalTest.coff
+	../bin/coff2noff networksignalTest.coff networksignalTest
+
+networkconditionTest.o: networkconditionTest.c
+	$(CC) $(CFLAGS) -c networkconditionTest.c
+networkconditionTest: networkconditionTest.o start.o
+	$(LD) $(LDFLAGS) start.o networkconditionTest.o -o networkconditionTest.coff
+	../bin/coff2noff networkconditionTest.coff networkconditionTest
+
+networkbroadcastTest.o: networkbroadcastTest.c
+	$(CC) $(CFLAGS) -c networkbroadcastTest.c
+networkbroadcastTest: networkbroadcastTest.o start.o
+	$(LD) $(LDFLAGS) start.o networkbroadcastTest.o -o networkbroadcastTest.coff
+	../bin/coff2noff networkbroadcastTest.coff networkbroadcastTest
+
+networkmonitorTest.o: networkmonitorTest.c
+	$(CC) $(CFLAGS) -c networkmonitorTest.c
+networkmonitorTest: networkmonitorTest.o start.o
+	$(LD) $(LDFLAGS) start.o networkmonitorTest.o -o networkmonitorTest.coff
+	../bin/coff2noff networkmonitorTest.coff networkmonitorTest
+
+networkgetmonitorTest.o: networkgetmonitorTest.c
+	$(CC) $(CFLAGS) -c networkgetmonitorTest.c
+networkgetmonitorTest: networkgetmonitorTest.o start.o
+	$(LD) $(LDFLAGS) start.o networkgetmonitorTest.o -o networkgetmonitorTest.coff
+	../bin/coff2noff networkgetmonitorTest.coff networkgetmonitorTest
 
 multipassportofficeTest.o: multipassportofficeTest.c
 	$(CC) $(CFLAGS) -c multipassportofficeTest.c

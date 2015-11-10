@@ -42,6 +42,20 @@
 #define SC_Rand 21
 #define SC_ReadInt 22
 #define SC_PrintLargeInt 23
+#define SC_SendMessage 24
+#define SC_CreateLockRPC 25 
+#define SC_AcquireRPC 26
+#define SC_ReleaseRPC 27
+#define SC_DestroyLockRPC 28
+#define SC_CreateConditionRPC 29
+#define SC_WaitRPC 30
+#define SC_SignalRPC 31
+#define SC_BroadcastRPC 32
+#define SC_DestroyConditionRPC 33
+#define SC_CreateMonitorRPC 34
+#define SC_SetMonitorRPC 35
+#define SC_GetMonitorRPC 36
+#define SC_DestroyMonitorRPC 37
 
 #define MAXFILENAME 256
 
@@ -143,24 +157,48 @@ void Yield();
 
 int CreateLock(char *name, int size);
 
+int CreateLockRPC(char *name, int size);
+
 void DestroyLock(int index);
+
+void DestroyLockRPC(int index);
 
 int Acquire(int index);
 
+int AcquireRPC(int index);
+
 void Release(int index);
 
+void ReleaseRPC(int index);
 
+int CreateMonitor(char *name, int size);
+
+void SetMonitor(int index, int value);
+
+int GetMonitor(int index);
+
+void DestroyMonitor(int index);
 /*Condition syscalls*/
 
 int CreateCondition(char *name, int size);
 
+int CreateConditionRPC(char *name, int size);
+
 void DestroyCondition(int index);
+
+void DestroyConditionRPC(int index);
 
 int Wait(int index, int lock);
 
+int WaitRPC(int index, int lock);
+
 void Signal(int index, int lock);
 
+void SignalRPC(int index, int lock);
+
 void Broadcast(int index, int lock);
+
+void BroadcastRPC(int index, int lock);
 
 /*Misc syscalls to help with userprograms*/
 void PrintfInt(char* string, int size, int id);
@@ -170,6 +208,8 @@ void PrintLargeInt(char* string, int size, int id);
 int Rand();
 
 int ReadInt();
+
+void SendMessage(char* string, int size);
 
 #endif /* IN_ASM */
 

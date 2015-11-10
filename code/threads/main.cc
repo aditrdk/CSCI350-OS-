@@ -60,6 +60,7 @@ extern void ThreadTest(void), Copy(char *unixFile, char *nachosFile);
 extern void Print(char *file), PerformanceTest(void);
 extern void StartProcess(char *file), ConsoleTest(char *in, char *out);
 extern void MailTest(int networkID);
+extern void Server();
 #ifdef THREADS
 extern void Problem2(void), TestSuite(void);
 #endif
@@ -157,6 +158,9 @@ main(int argc, char **argv)
 		}
 #endif // FILESYS
 #ifdef NETWORK
+		if(!strcmp(*argv, "-server")) {
+	    	Server();
+	    }
         if (!strcmp(*argv, "-o")) {
 	    ASSERT(argc > 1);
             Delay(2); 				// delay for 2 seconds

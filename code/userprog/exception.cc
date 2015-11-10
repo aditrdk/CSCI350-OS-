@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <stdlib.h>
+#include <sstream>
 
 extern "C" { int bzero(char *, int); };
 using namespace std;
@@ -991,6 +992,515 @@ void HandlePageFault(int vaddr) {
   interrupt->SetLevel(oldLevel);
 }
 
+int CreateLockRPC_Syscall(unsigned int vaddr, int len) {
+    // Create the file with the name in the user buffer pointed to by
+    // vaddr.  The file name is at most MAXFILENAME chars long.  No
+    // way to return errors, though...
+    char *buf = new char[len+1];  // Kernel buffer to put the name in
+    char message[MaxMailSize];
+    int index;
+    if (!buf) return -1;
+
+    if( copyin(vaddr,len,buf) == -1 ) {
+      printf("%s","Bad pointer passed to CreateLock\n");
+      delete buf;
+      return -1;
+    }
+
+    buf[len]='\0';
+    PacketHeader outPktHdr, inPktHdr;
+    MailHeader outMailHdr, inMailHdr;
+    strcpy(message, "CreateLock ");
+    strcat(message, buf);
+    outPktHdr.to = 0;   
+    outMailHdr.to = 0;
+    outMailHdr.from = 0;
+    outMailHdr.length = strlen(message) + 1;
+    bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+    if(!success) {
+      printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+      interrupt->Halt();
+    }
+    postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+    fflush(stdout);
+    std::stringstream ss;
+    ss << message;
+    ss >> message;
+    if(!strcmp(message, "TableFull")){
+      printf("%s\n", message);
+      return -1;
+    } 
+    ss >> index;
+    //delete buf;
+    return index;
+}
+
+int AcquireRPC_Syscall(int index){
+  std::stringstream ss;
+  char message[MaxMailSize] ,lockNum[MaxMailSize];
+  ss << index;
+  ss >> lockNum;
+  strcpy(message, "AcquireLock ");
+  strcat(message, lockNum);
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms;
+  ms << message;
+  char call[MaxMailSize];
+  ms >> call;
+  if(!strcmp(message, "InvalidLock")){
+   printf("%s\n", message);
+   return -1;
+ }
+  ms >> index;
+  return index;
+}
+
+void ReleaseRPC_Syscall(int index){
+  std::stringstream ss;
+  char message[MaxMailSize] ,lockNum[MaxMailSize];
+  ss << index;
+  ss >> lockNum;
+  strcpy(message, "ReleaseLock ");
+  strcat(message, lockNum);
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms;
+  ms << message;
+  char call[MaxMailSize];
+  ms >> call;
+  if(!strcmp(message, "InvalidLock")){
+    printf("%s\n", message);
+  }
+}
+
+void DestroyLockRPC_Syscall(int index){
+  std::stringstream ss;
+  char message[MaxMailSize] ,lockNum[MaxMailSize];
+  ss << index;
+  ss >> lockNum;
+  strcpy(message, "DestroyLock ");
+  strcat(message, lockNum);
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms;
+  ms << message;
+  char call[MaxMailSize];
+  ms >> call;
+  if(!strcmp(message, "InvalidLock")){
+    printf("InvalidLock\n");
+  }
+}
+
+int CreateConditionRPC_Syscall(unsigned int vaddr, int len){
+  char *buf = new char[len+1];  // Kernel buffer to put the name in
+  char message[MaxMailSize];
+  int index;
+  if (!buf) return -1;
+
+  if( copyin(vaddr,len,buf) == -1 ) {
+    printf("%s","Bad pointer passed to CreateCondition\n");
+    delete buf;
+    return -1;
+  }
+
+  buf[len]='\0';
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  strcpy(message, "CreateCondition ");
+  strcat(message, buf);
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ss;
+  ss << message;
+  ss >> message;
+  if(!strcmp(message, "TableFull")){
+   printf("%s\n", message);
+   return -1;
+ }
+  ss >> index;
+  //delete buf;
+  return index;
+}
+
+int WaitRPC_Syscall(int index, int lock){
+  std::stringstream ss, bs;
+  char message[MaxMailSize] ,lockNum[MaxMailSize], conditionNum[MaxMailSize];
+  ss << index;
+  ss >> conditionNum;
+  bs << lock;
+  bs >> lockNum;
+  strcpy(message, "WaitCondition ");
+  strcat(message, conditionNum);
+  strcat(message, " ");
+  strcat(message, lockNum);
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms, rs;
+  ms << message;
+  char call[MaxMailSize];
+  ms >> call;
+  if(!strcmp(message, "InvalidLock")){
+   printf("%s\n", message);
+   return -1;
+ }
+  if(!strcmp(message, "InvalidCondition")){
+    printf("%s\n", message);
+    return -1;
+  } 
+  else if(!strcmp(call, "ReleasedLock")){
+    printf("Released Lock%d\n", lock);
+     postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+     fflush(stdout);
+     rs << message;
+     ms >> call;
+     if(!strcmp(message, "InvalidLock")){
+      printf("%s\n", message);
+      return -1;
+     } 
+  }
+  ms >> index;
+  AcquireRPC_Syscall(lock);
+  return index;
+}
+
+void SignalRPC_Syscall(int index, int lock){
+  std::stringstream ss, bs;
+  char message[MaxMailSize] ,lockNum[MaxMailSize], conditionNum[MaxMailSize];
+  ss << index;
+  ss >> conditionNum;
+  bs << lock;
+  bs >> lockNum;
+  strcpy(message, "SignalCondition ");
+  strcat(message, conditionNum);
+  strcat(message, " ");
+  strcat(message, lockNum);
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms;
+  ms << message;
+  char call[MaxMailSize];
+  ms >> call;
+  if(!strcmp(message, "InvalidLock")){
+   printf("%s\n", message);
+   return;
+ }
+  if(!strcmp(message, "InvalidCondition")){
+   printf("%s\n", message);
+   return;
+ }
+  ms >> index;
+  return;
+}
+
+void DestroyConditionRPC_Syscall(int index){
+  std::stringstream ss;
+  char message[MaxMailSize] ,lockNum[MaxMailSize];
+  ss << index;
+  ss >> lockNum;
+  strcpy(message, "DestroyCondition ");
+  strcat(message, lockNum);
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms;
+  ms << message;
+  char call[MaxMailSize];
+  ms >> call;
+  if(!strcmp(message, "InvalidCondition")){
+    printf("InvalidCondition\n");
+  }
+}
+
+void BroadcastRPC_Syscall(int index, int lock){
+  std::stringstream ss, bs;
+  char message[MaxMailSize] ,lockNum[MaxMailSize], conditionNum[MaxMailSize];
+  ss << index;
+  ss >> conditionNum;
+  bs << lock;
+  bs >> lockNum;
+  strcpy(message, "BroadcastCondition ");
+  strcat(message, conditionNum);
+  strcat(message, " ");
+  strcat(message, lockNum);
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms;
+  ms << message;
+  char call[MaxMailSize];
+  ms >> call;
+  while(strcmp(call, "BroadcastedCondition") != 0){
+    if(!strcmp(message, "InvalidLock")){
+     printf("%s\n", message);
+     return;
+    }
+    if(!strcmp(message, "InvalidCondition")){
+     printf("%s\n", message);
+     return;
+   }
+    postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+    fflush(stdout);
+    std::stringstream cs;
+    cs << message;
+    cs >> call;
+  }
+  return;
+}
+
+int CreateMonitorRPC_Syscall(unsigned int vaddr, int len){
+    char *buf = new char[len+1];  // Kernel buffer to put the name in
+    char message[MaxMailSize];
+    int index;
+    if (!buf) return -1;
+
+    if( copyin(vaddr,len,buf) == -1 ) {
+      printf("%s","Bad pointer passed to CreateMonitor\n");
+      delete buf;
+      return -1;
+    }
+
+    buf[len]='\0';
+    PacketHeader outPktHdr, inPktHdr;
+    MailHeader outMailHdr, inMailHdr;
+    strcpy(message, "CreateMonitor ");
+    strcat(message, buf);
+    outPktHdr.to = 0;   
+    outMailHdr.to = 0;
+    outMailHdr.from = 0;
+    outMailHdr.length = strlen(message) + 1;
+    bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+    if(!success) {
+      printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+      interrupt->Halt();
+    }
+    postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+    fflush(stdout);
+    std::stringstream ss;
+    ss << message;
+    ss >> message;
+    if(!strcmp(message, "TableFull")){
+      printf("%s\n", message);
+      return -1;
+    } 
+    ss >> index;
+    //delete buf;
+    return index;
+}
+
+void SetMonitorRPC_Syscall(int index, int value){
+  std::stringstream ss, bs;
+  char message[MaxMailSize], mValue[MaxMailSize], monitorNum[MaxMailSize];
+  ss << index; 
+  ss >> monitorNum;
+  bs << value;
+  bs >> mValue;
+  strcpy(message, "SetMonitor ");
+  strcat(message, monitorNum);
+  strcat(message, " ");
+  strcat(message, mValue);
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms;
+  ms << message;
+  char call[MaxMailSize];
+  ms >> call;
+  if(!strcmp(message, "InvalidMonitor")){
+   printf("%s\n", message);
+   return;
+ }
+  return;
+}
+
+int GetMonitorRPC_Syscall(int index){
+  std::stringstream ss;
+  char message[MaxMailSize], monitorNum[MaxMailSize];
+  ss << index; 
+  ss >> monitorNum;
+  strcpy(message, "GetMonitor ");
+  strcat(message, monitorNum); 
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms;
+  ms << message;
+  printf("%s\n", message);
+  char call[MaxMailSize];
+  ms >> call;
+  if(!strcmp(message, "InvalidMonitor")){
+   printf("%s\n", message);
+   return -1;
+ }
+  else if(!strcmp(call, "GotMonitor")){
+    ms >> index;
+    return index;
+  }
+  return -1;
+}
+
+void DestroyMonitorRPC_Syscall(int index){
+  std::stringstream ss;
+  char message[MaxMailSize], monitorNum[MaxMailSize];
+  ss << index; 
+  ss >> monitorNum;
+  strcpy(message, "DestroyMonitor ");
+  strcat(message, monitorNum); 
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(message) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, message);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+    interrupt->Halt();
+  }
+  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  fflush(stdout);
+  std::stringstream ms;
+  ms << message;
+  printf("%s\n", message);
+  char call[MaxMailSize];
+  ms >> call;
+  if(!strcmp(message, "InvalidMonitor")){
+   printf("%s\n", message);
+   return;
+  }
+  return; 
+}
+
+void SendMessage_Syscall(unsigned int vaddr, int len) {
+  PacketHeader outPktHdr, inPktHdr;
+  MailHeader outMailHdr, inMailHdr;
+  char *buf = new char[len];  // Kernel buffer to put the name in
+
+    if (!buf) return;
+
+    if( copyin(vaddr,len,buf) == -1 ) {
+      printf("%s","Bad pointer passed to SendMessage\n");
+      delete buf;
+      return;
+    }
+  outPktHdr.to = 0;   
+  outMailHdr.to = 0;
+  outMailHdr.from = 0;
+  outMailHdr.length = strlen(buf) + 1;
+  bool success = postOffice->Send(outPktHdr, outMailHdr, buf);
+  if(!success) {
+    printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
+      interrupt->Halt();
+  }
+  else{
+    printf("successfully sent message [%s] to server", buf);
+  }
+}
+
 void ExceptionHandler(ExceptionType which) {
     int type = machine->ReadRegister(2); // Which syscall?
     int rv=0; 	// the return value from a syscall
@@ -1097,6 +1607,62 @@ void ExceptionHandler(ExceptionType which) {
        case SC_PrintLargeInt:
        DEBUG('a', "PrintLargeInt syscall.\n");
        PrintLargeInt_Syscall(machine->ReadRegister(4), machine->ReadRegister(5), machine->ReadRegister(6));
+       break;
+       case SC_SendMessage:
+       DEBUG('a', "SendMessage syscall.\n");
+       SendMessage_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+       break;
+       case SC_CreateLockRPC:
+       DEBUG('a', "CreateLockRPC syscall.\n");
+       rv = CreateLockRPC_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+       break;
+       case SC_AcquireRPC:
+       DEBUG('a', "AcquireRPC syscall.\n");
+       rv = AcquireRPC_Syscall(machine->ReadRegister(4));
+       break;
+       case SC_ReleaseRPC:
+       DEBUG('a', "ReleaseRPC syscall.\n");
+       ReleaseRPC_Syscall(machine->ReadRegister(4));
+       break;
+       case SC_DestroyLockRPC:
+       DEBUG('a', "DestroyLockRPC syscall.\n");
+       DestroyLockRPC_Syscall(machine->ReadRegister(4));
+       break;
+       case SC_CreateConditionRPC:
+       DEBUG('a', "CreateConditionRPC syscall.\n");
+       rv = CreateConditionRPC_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+       break;
+       case SC_WaitRPC:
+       DEBUG('a', "WaitRPC syscall.\n");
+       rv = WaitRPC_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+       break;
+       case SC_SignalRPC:
+       DEBUG('a', "SignalRPC syscall.\n");
+       SignalRPC_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+       break;
+       case SC_BroadcastRPC:
+       DEBUG('a', "BroadcastRPC syscall.\n");
+       BroadcastRPC_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+       break;
+       case SC_DestroyConditionRPC:
+       DEBUG('a', "DestroyConditionRPC syscall.\n");
+       DestroyConditionRPC_Syscall(machine->ReadRegister(4));
+       break;
+       case SC_CreateMonitorRPC:
+       DEBUG('a', "CreateMonitorRPC syscall.\n");
+       rv = CreateMonitorRPC_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+       break;
+       case SC_SetMonitorRPC:
+       DEBUG('a', "SetMonitorRPC syscall.\n");
+       SetMonitorRPC_Syscall(machine->ReadRegister(4), machine->ReadRegister(5));
+       break;
+       case SC_GetMonitorRPC:
+       DEBUG('a', "GetMonitorRPC syscall.\n");
+       rv = GetMonitorRPC_Syscall(machine->ReadRegister(4));
+       break;
+       case SC_DestroyMonitorRPC:
+       DEBUG('a', "DestroyMonitorRPC syscall.\n");
+       DestroyMonitorRPC_Syscall(machine->ReadRegister(4));
        break;
      }
 

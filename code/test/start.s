@@ -138,6 +138,14 @@ CreateLock:
 	j	$31
 	.end CreateLock
 
+	.globl CreateLockRPC
+	.ent	CreateLockRPC
+CreateLockRPC:
+	addiu $2,$0,SC_CreateLockRPC
+	syscall
+	j	$31
+	.end CreateLockRPC
+
 	.globl DestroyLock
 	.ent	DestroyLock
 DestroyLock:
@@ -233,6 +241,110 @@ PrintLargeInt:
 	syscall
 	j	$31
 	.end PrintLargeInt
+
+	.globl SendMessage
+	.ent	SendMessage
+SendMessage:
+	addiu $2,$0,SC_SendMessage
+	syscall
+	j	$31
+	.end SendMessage
+
+	.globl AcquireRPC
+	.ent	AcquireRPC
+AcquireRPC:
+	addiu $2,$0,SC_AcquireRPC
+	syscall
+	j	$31
+	.end AcquireRPC
+
+	.globl ReleaseRPC
+	.ent	ReleaseRPC
+ReleaseRPC:
+	addiu $2,$0,SC_ReleaseRPC
+	syscall
+	j	$31
+	.end ReleaseRPC
+
+	.globl DestroyLockRPC
+	.ent	DestroyLockRPC
+DestroyLockRPC:
+	addiu $2,$0,SC_DestroyLockRPC
+	syscall
+	j	$31
+	.end DestroyLockRPC
+
+	.globl CreateConditionRPC
+	.ent	CreateConditionRPC
+CreateConditionRPC:
+	addiu $2,$0,SC_CreateConditionRPC
+	syscall
+	j	$31
+	.end CreateConditionRPC
+
+	.globl WaitRPC
+	.ent	WaitRPC
+WaitRPC:
+	addiu $2,$0,SC_WaitRPC
+	syscall
+	j	$31
+	.end WaitRPC
+
+	.globl SignalRPC
+	.ent	SignalRPC
+SignalRPC:
+	addiu $2,$0,SC_SignalRPC
+	syscall
+	j	$31
+	.end SignalRPC
+
+	.globl BroadcastRPC
+	.ent	BroadcastRPC
+BroadcastRPC:
+	addiu $2,$0,SC_BroadcastRPC
+	syscall
+	j	$31
+	.end BroadcastRPC
+
+	.globl DestroyConditionRPC
+	.ent	DestroyConditionRPC
+DestroyConditionRPC:
+	addiu $2,$0,SC_DestroyConditionRPC
+	syscall
+	j	$31
+	.end DestroyConditionRPC
+
+	.globl CreateMonitorRPC
+	.ent	CreateMonitorRPC
+CreateMonitorRPC:
+	addiu $2,$0,SC_CreateMonitorRPC
+	syscall
+	j	$31
+	.end CreateMonitorRPC
+
+	.globl SetMonitorRPC
+	.ent	SetMonitorRPC
+SetMonitorRPC:
+	addiu $2,$0,SC_SetMonitorRPC
+	syscall
+	j	$31
+	.end SetMonitorRPC
+
+	.globl GetMonitorRPC
+	.ent	GetMonitorRPC
+GetMonitorRPC:
+	addiu $2,$0,SC_GetMonitorRPC
+	syscall
+	j	$31
+	.end GetMonitorRPC
+
+	.globl DestroyMonitorRPC
+	.ent	DestroyMonitorRPC
+DestroyMonitorRPC:
+	addiu $2,$0,SC_DestroyMonitorRPC
+	syscall
+	j	$31
+	.end DestroyMonitorRPC
 
 /* dummy function to keep gcc happy */
         .globl  __main

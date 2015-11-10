@@ -1,153 +1,161 @@
-Title:  Writeup for Project 2, Fall/Spring 2015
-Date:	10/20/2015
+Title:  Writeup for Project 3, Fall/Spring 2015
+Date:	11/08/2015
 Group:	Aditya Radhakrishna radh439@usc.edu
 		Kyle Vaidyanathan kvaidyan@usc.edu
  
 I. Requirements:
-	Part 1: The requirement is to implement system calls for Yield, CreateLock, DestroyLock, Acquire, Release, CreateCondition, DestroyCondition, Wait, Signal, Broadcast, and Exit.
-		This includes tables and other variables for the OS to keep track of user programs' locks and conditions.
-	Part 2: The requirement is to implement system calls for Fork, Exec, and enhance the other system calls, especially Exit in order to properly keep the OS updated about the processes, threads, and resources.
-		The important requirement of part 2 is to implement multiprogramming so that a single address space can simultaneously handle multiple stacks and threads sharing resources using address translation through a page table. 
-		We are required to have a process table that keeps track of the number of executing threads in a process so that it can be ended if all threads stop running for some reason.
-		The implementation of these syscalls is required to be "bullet-proof" so that the OS never crashes from any user program.
-	Part 3: The requirement is to convert the Passport Office simulation program into a Nachos user program that uses system calls to achieve all of its features that are not available in C. This includes the syscalls from parts 1 and 2, as well as a few others as necessary such as printing integers.
+	Part 1: Our implementation is required to handle TLB misses as Page Fault Exceptions and correctly do address translation to update an entry in the TLB (using FIFO replacement) with the correct translation for the needed virtual address. 
+
+	Part 2: In addition to using the TLB, in part 2 we extend the memory management to use demand paged virtual memory. When a new process is created, nothing is actually loaded into memory. When a page is needed it is loaded into main memory and when memory is full a page is evicted. Evicted pages that are dirty are written to and loaded from a swap file. The page replacement policy can be either random using -P RAND or first in first out -P FIFO (default is FIFO).  
+
+	Part 3:  Implement RPC Lock, Condition, and Monitor and syscalls. Instead of deleteing the non rpc syscalls, we created new Syscalls called CreateLockRPC, DestroyLockRPC, AcquireLockRPC, ReleaseLockRPC, etc. for conditions and monitor variables. These remote procedure calls send messages to a server nachos that parses the request and has the tables of locks, conditions, and monitor variables. 
 
 II. Assumptions:
 	We assume the following maximums for the Nachos OS capabilities:
 		Each process may have  up to 100 threads (100 stacks).
-		The machine is set to have 100,000 physical pages of memory.
+		The machine is set to have a TLB with 4 entries and 32 physical pages of memory.
 		Nachos can simultaneously have 420 locks and 420 conditions, and will print an error and return -1 if it reaches it's limit.
+	We assume the user programs are aware if they want to use RPC to a server syscalls instead of regular syscalls. This allows the previous user programs to be run without a server nachos.
+	
 		
 III. Design:
-	Our design for the system calls and multiprogramming is based on the lectures and the given assignment help guides. Locks and conditions are stored in arrays of KernelLock and KernelCondition structs. They have a lock to prevent race conditions and each have a bitmap to keep track of indices that are in use. The structs also keep track of waiting threads and a bool isToBeDeleted so that they will not be deleted while threads are waiting for the lock/condition.
-The process table uses the Table class defined in table.h to hold KernelProcess structs. 
-Each address space has a page table that can hold up to 100 stacks and a bitmap to keep track of which stacks in its page table are in use by threads. The virtual pages are not assigned physical pages unless they are actually in use by a thread.
+	Our design for demand paged virtual memory is based on the logic and organization described in lecture. On a PageFaultException the inverse page table is first searched sequentially for a page in memory with the matching virtual page and address space. If it is not found, then each address space has it’s own page table that keeps track of where all its virtual pages are, whether that is in main memory, in the executable, in the swap file, or nowhere. The needed page is loaded into memory and the page table, IPT, and TLB are all updated appropriately. Lastly, there is an extra step needed when the main memory is full. Using either a random or FIFO policy, a page in main memory is chosen to be evicted. When this happens the evicted page is searched for in the TLB for changes (indicated by a dirty bit) and invalidated. If the page is dirty, then it is written to a swap file, and it’s location is updated in address space’s page table. 
+	Our design for RPCs use a server loop that parses messages and responds to them one at a time. User programs can call monitor, condition, or lock syscalls with RPC at the end such as BroadcastRPC to send a RPC call to the server.
 
 
 IV. Implementation:
 	+ Files Modified
+		syscall.h - Added Create Get Set and Destroy RPC monitor syscalls
+
+		userprog/exception.cc - 
+Added PageFaultException handling (described below in functions added/modified)
+	Added RPC versions of lock and condition syscalls as well as monitor RPC calls
 		
-		userprog/syscall.h - Added new interfaces for syscalls for user programs
-		userprog/exception.cc - Added implementation of all system calls
-		userprog/addrspace.cc and addrspace.h - Multithreaded process support in address space
+		userprog/addrspace.cc and addrspace.h - Virtual memory, nothing preloaded from executable. Constructor now takes a file name and opens the executable itself
 
-		threads/system.cc and system.h - Added data structures for OS
-		threads/synch.cc and synch.h - Added returns from Lock/Condition functions for keeping track of sleeping threads, and public bool isHeld function to test if a lock is free or not
-		threads/thread.h - Added stackId field (for user program threads to keep track of their stack in the address space
+		threads/system.cc and system.h - Added data structures for dema
 
-		test/start.s - Added code for all the new syscalls
 		test/Makefile - Added compile lines for making all user programs
+		Makefile.common - Added compile lines to include iptentry.h and ptentry.h
 		
-		machine/machine.h - Increased numPhysPages to 100000	
+		machine/machine.h - Decreased NumPhysPages to 32	
 
 	+ Files added 
-		test/yieldTest.c
-		test/lockTest.c
-		test/threadsTest.c
-		test/conditionTest.c
-		test/execTest.c
-		test/passportoffice.c
-	
-	+ Data Structures added, and the file they were added to.
-		system.h/.cc
-		KernelLock struct: hold pointer to real lock as well as the address space it was created by, the number of waiting threads, bool for whether it is to deleted when possible.
-		KernelCondtion struct: hold pointer to condition as well as the address space it was created by, the number of waiting threads, and bool for whether it is to be deleted when possible.
-		KernelProcess struct: holds all the information about a process, most importantly the number of currently running threads.
-
-		KernelLock array lockTable, BitMap lockMap, and Lock lockTableLock - to keep track of locks for user programs
-		KernelCondition array conditionTable, BitMap conditionMap, and Lock conditionTableLock - to keep track of conditions for user programs
-		Table processTable, Lock processTableLock - to keep track of processes
-		BitMap memoryMap and Lock memoryMapLock - to keep track of pages of physical memory.
-	
 		
-	+ Data Structures modified, and the file they were in.
-		none.
+		test/2matmult.c - Test program that forks two threads that each execute matmult.
+		test/iptentry.h - defines IPTEntry class, see below for description
+		test/ptentry.h - defines PTEntry class, see below for description
+
+		network/server.cc - Nachos server code implemented here
+
+	+ Data Structures added, and the file they were added to.
+		system.h/.cc - 
+IPTEntry* ipt - inversed page table that stores IPTEntries, indexed by physical page. Created to be the same size as NumPhysPages
+OpenFile* swapFile - open file pointer to the swap file that is opened on launch and closed when nachos quits. 
+int* pageIndices and List* pageQueue - List of integers that are used as a queue of physical pages in memory that were loaded in. This is used for FIFO page replacement. Uses an array of integers the size of NumPhysPages so that the List data structure could use int pointers instead of ints. (List works only with pointers not primitives).
+
+		iptentry.h - defines IPTEntry class,  which inherits from TranslationEntry and adds a space pointer so that the IPT can differentiate between the same virtual page number from different processes.
+
+ptentry.h - defines PTEntry class, which inherits from TranslationEntry and adds booleans that indicate whether the page is currently in memory, on disk in the swap file, in the executable. It also stores a byte offset for the location of the page if it is in the executable or in the swapfile.
+
+server.cc
+	ServerLock - struct that holds the data for a server lock such as the owner and the queue of waiting clients. This does not actually contain a lock variable because the server should never go to sleep while interacting with locks. Identified by a name.
+	ServerCondition - struct that holds the data for the server condition variable. Identified by a name.
+	ServerMonitor - struct that holds an integer monitor variable and its name identifier.
+		
+	+ Data Structures modified, and the file they were in
+		addrspace.h/.cc - Page table is now an array of PTEntry instead of TranslationEntry
 	+ Functions added and in which file.
-		addrspace.cc
-			AllocateStack(int stackID) - adds 8 pages for stack in the correct place in the page table and allocates physical pages for them.
-DeallocateStack(int stackID) - frees up the 8 pages of physical memory allocated to the given stack (calls DeallocatePage)
-DeallocatePage(int index) - frees up the page in main memory.
+		syscall.h
+	New syscalls for user programs:
+			CreateLockRPC, DestroyLockRPC, AcquireRPC, ReleaseRPC, 
+			CreateConditionRPC, DestroyConditionRPC, SignaRPC, WaitRPC, BroadcastRPC, CreateMonitorRPC, DestroyMonitorRPC, GetMonitorRPC, SetMonitorRPC
 
 		exception.cc
-			All the syscalls are implemented as separate functions here
-			Yield_Syscall - yields current thread
-CreateLock_Syscall - creates a new kernel lock and returns its index
-DestroyLock_Sycall - takes a kernel lock index and deletes it(or marks it to be deleted)
-Acquire_Syscall - takes a kernel lock index and calls acquire on the lock
-Release_Syscall - takes a kernel lock index and calls release on the lock
+HandlePageFault(int vaddr) - takes a virtual address that is needed and does all the work to load the needed page into memory. If the page is not in the IPT it calls HandleIPTMiss
+HandleIPTMiss(int vpn) - takes a virtual address that needs to be moved into physical memory. It looks up the page in the current address space page table and loads it in. If there is no available space in main memory it will call HandleFullMemory.
+int HandleFullMemory() - Chooses a page to evict from main memory either randomly or with FIFO policy and updates the TLB, IPT, and page table to reflect the changes. If the page is marked dirty in the IPT or TLB then it is saved to disk.	
+CreateMonitorRPC_Syscall, DestroyMonitorRPC_Syscall, GetMonitorRPC_Syscall, SetMonitoRPC_Syscall - Handles new syscalls for user programs to create a shared monitor variable, set and get its value, and destroy it. Sends message to the server through the post office.
 
-CreateCondition_Syscall - creates a kernel condition and returns the index
-DestroyCondition_Syscall - takes a kernel condition index and deletes it(or marks it to be deleted)
-Wait_Syscall - takes a kernel condition index and a kernel lock index and calls wait on the condition with the lock
-Signal_Syscall - takes a kernel condition index and a kernel lock index and calls signal on the condition with the lock
-Broadcast_Syscall - takes a kernel condition index and a kernel lock index and calls broadcast on the condition with the lock
 
-Exit_Syscall - Ends the current thread. If it is the last thread in the process then it ends the process and frees the resources. If it is the last thread in the last process, then it halts nachos.
+server.cc
+	Server() Constructor - initializes variables and then goes into infinite loop of waiting for messages from clients and processing them
 
-Fork_Syscall - Takes a virtual address of a function and creates a new thread in the same address space, forking it with the kernelThread function
-kernelThread - Initializes the registers and stack for a new thread and then sets the machine to run the function passed into Fork by the user program.
+	ProcessMessage(char* message) - Takes a message and parses the request type then calls the appropriate server function for locks, conditions, and monitors.
+	ServerCreateLock, ServerAcquireLock, ServerReleaseLock, ServerDestroyLock - Functions that handle lock functions from clients on server managed lock variables. The function processes the request, then generates and sends a response back to the client.
 
-Exec_Sycall - Takes a name of a file and creates a new process address space and a main thread for it. Forks mainProcessThread to be the main of the new process
-mainProcessThread - Initializes a new address space and starts running the executable.
+	ServerCreateCondition, ServerSignalCondition, ServerWaitCondition, ServerBroadcastCondition, ServerDestroyCondition - Functions that handle condition functions from clients on server managed condition variables. The function processes the request, then generates and sends a response back to the client.
 
-PrintfInt - Takes in a char* that follows printf format (with %d) for example and prints it to the console. This function does special modulus math to be able to print multiple integers that are smaller than 100. To pass two integers the user program must add 1000 and add 1000 times the second value. For a third integer to be passed, the user program must add 100000 and add 100000 times the third value.
-PrintLargeInt - takes a char* that follows printf format and prints it to the console. This does not parse or make any changes to the integer so it can print any size integer. 
-Rand - simply returns a random value between 0 and the c++ MAX_RAND by calling rand() and returning the exact value to the user program
-ReadInt - takes a min and max and reads an integer from the user console input, asking them again if it is outside the specified range.
-			
+	ServerCreateMonitor, ServerSetMonitor, ServerGetMonitor, ServerDestroyMonitor - Functions that parse requests for access to server managed monitor variables. 
+
+
+
+
 
 	+ Functions modified and in which file.
 addrspace.cc
-Constructor: Changed this function to use the page table and find available pages in main memory. Now capable of handling multiple threads.
-
-synch.cc
-Acquire, Release, Signal, Wait, Broadcast changed to return the number of threads that were woken up. For the case of acquire and wait it returns 1 only if the thread never went to sleep. Threads that went to sleep will be noted as awake again by the release, signal, and broadcast calls that woke them up.
+Constructor -  Now takes filename parameter and opens the executable but nothing is loaded into memory.
+AllocateStack(int stackID) - Sets the page table but does not load anything into memory
+DeallocateStack(int stackID) - Calls DeallocatePage for every page in the page table that is marked as valid
+DeallocatePage(int index) - Marks the page as not valid in the page table, and if needed marks it as invalid in IPT and TLB
 
 exception.cc
-	ExceptionHandler added switch cases for all our syscalls
+	ExceptionHandler added case for PageFaultException that calls HandlePageFault.
+	Added to Syscall Exception switch statement for new RPC Syscalls
 
+	
+	
+	
 
+                                                                                                                                                                                                          
 V. Testing: 
 	+ How to test
-		For all of the following tests, first go to the userprog directory and run “setenv PATH ../gnu/:$PATH” then run “gmake” . Then go to the test directory and run “gmake” to compile the user programs. Then go back to the userprog directory and run one of the tests below:
-		Yield Test : run “nachos -x ../test/yieldTest”
-		Lock Test :  run “nachos -x ../test/lockTest”
-		Conditions :  run “nachos -x ../test/conditionTest”
-		Fork :  run “nachos -x ../test/forkTest”
-		Exec :  run “nachos -x ../test/execTest”
-		Passport Office tests: run “nachos -x ../test/passportoffice”
-		Multi Passport Office Test: run “nachos -x ../test/multipassportofficeTest”
+		For all of the following tests, first go to the test directory and run “setenv PATH ../gnu/:$PATH” then run “gmake” to compile the user programs. 
+		All tests can then be run from the network directory, first run gmake, then follow the instructions below.
 
+To test Parts 1 and 2:
+Run the matmult and sort programs. You can run Nachos with the debug flag ‘-d e’ to see the thread Exit status and see the result of the programs. In order to change replacement policy use the flag -P RAND or -P FIFO this needs to be BEFORE the -x flag. For example run them like this:
+
+“nachos -P RAND -x ../test/matmult -rs 350 -d e”
+
+“nachos -P RAND -x ../test/2matmult -rs 350 -d e”
+
+“nachos -P RAND -x ../test/sort -rs 350 -d e”
+
+To test Part 3:
+		To test all the RPC calls in part three, there are several user programs that must be run in different instances of nachos (will need multiple terminal windows).
+		First, to run the server: compile with gmake in the network directory, and then run ‘nachos -m 0 -server’
+	In another terminal run the programs like this:  “nachos -m 1 -x ../test/networklockTest”
+
+	To test Locks: run networklockTest with -m 1, and then run it again on another machine with -m 2
+	The second machine will be waiting to acquire the lock since machine 1 already owns it
+If we runt networkreleaseTest with -m 1 it will release the lock, allowing machine 2 to acquire it and continue
+To test Conditions:
+run networkconditionTest on multiple machines with -m 1, -m 2 , -m 3 .. -m n etc. who will all wait to be signalled and then run networkbroadcastTest with machine id -m n-1 all the other machines will continue running since they have been signalled. BroadcastRPC calls Signal therefore if it works so does signal, alternatively you can test with networksignalTest -m x
+
+To test monitors: 
+run networkmonitorTest with -m 1 and it will create and set a monitor variable to 420. then run networkmonitorgetTest and it will print out the value of the monitor variable correctly and delete it.
+
+	
 	+ Test Output
-	Yield test prints a message and then yields
+	To see how memory is being managed. Use the debug flag ‘-d c’ which will list all IPT misses and where pages are being read or written to the disk.
+	The RPC tests will print out details of the server side in the server terminal window describes the message being parsed.
+	Each client program will print the actions they are doing and any error they receive.
 
-	Lock test creates locks and then prints error messages when trying to acquire, release and destroy invalid and uninstantiated locks. Main thread releases lock num 1 which lock acquire thread can then acquire
-
-	Condition Test creates locks and conditions and then prints error messages for trying to wait, signal and broadcast conditions when the thread does not hold the lock for that condition and when the condition has not been instantiated. The wait thread then waits and the signal thread signals it. Multiple sleep threads wait on a condition and broadcast thread broadcasts on that condition
-
-	Fork Test prints out a message saying exec’d multiple times
-
-	Exec Test prints messages indicating that it is launching yieldTest and threadsTest which then print testing yield and 40 iterations of forking thread respectively
-
-Passport Office prompts the user for which test they would like to run and for num customers, senators and clerks depending on which test they chose. It then prints the interactions between the customers and clerks and finally prints out when the last customer leaves before ending
-
-Multi Passport Office test runs two separate instances of passport office each of them prompt the user for their respective inputs and run the appropriate test with the same output as a passport office 		
-
+	
 VI. Discussion:
-	+ Experiment expectation.  (What is supposed to happen.)
-		The main experiment is to run the passport office from project 1 as a user program using the syscalls from part 1 and 2. We expect to see normal execution of the passport office including all of it’s sub test cases and the full simulation. The customers should all leave the office causing the execution to complete. If the management of threads is done correctly in the process table, nachos should halt at the end because there are no more running threads in the process. We expect there to be no race conditions just as in project 1, this includes customers choosing the shortest line, customers not leaving the office until they have a passport, clerks going to break and managers waking up clerks on break, etc. 
-		Furthermore, using our Exec syscall, we expect that we can run two passport offices simultaneously without any errors occurring. When two are running, the user would need to give input for the setup of both passport offices, and it is not possible to tell which process is being interacted with.
-		For the individual tests described above in the Testing section, the code and comments in the files describe what specific case is being tested, these are the simple tests that try to break the OS by giving invalid input as well as the correct usage of each syscall.
+	+ Experiment expectation. 
+		matmult and 2matmult - expectation is to have matmult exit with status 7220. 2matmult forks two threads that each execute matmult and then exit with status 0. Then each of the matmults exit with status 7220
 
 	+ Experiment result
-As expected, the passport office ran properly without errors and using only our syscalls avoided any of the race conditions. The forking of many new threads (up to 50 customers, 10 senators, 5 of each clerk) does not cause any page fault exceptions.
-Running a user program that execs two passport offices also behaved as expected. It was not possible to tell which instance is receiving the input, but both passport offices ran to completion.
-The individual tests were used to debug problem with our syscalls, and their result is as we expect them to be which is how we determined they were working correctly before running the main experiment, the passport office. These tests cause Nachos to print out error messages when the user program used incorrect parameters.
+matmult and 2matmult - result is 7220 with any -rs value for matmult. In 2matmult the main thread exits with status 0, then the forked threads print that they are launching matmult with exit status 0, and then after a short pause for calculation, the exec’d matmults each exit with status 7220.
 
 	+ Explanation
-		The passport offices uses up to 80 threads within a single process that share data while also running separate code, which shows that our fork syscall properly allocates different stacks within the same address space. The threads also access shared data using locks and conditions and does not output anything incorrect, showing that our lock and condition syscalls are properly ensuring mutual exclusion and sequencing by interfacing between the user program and the locks and conditions implemented in project 1.
-		Each of the individual tests listed in the Testing section above demonstrate that the syscalls are safe from all kinds of user programs and cannot be used to crash nachos. They show this by calling syscalls with various incorrect input, and nachos only printed error messages but did not crash or throw any exceptions. The only way to cause nachos to halt is by exiting/sleeping all threads, calling halt, or by exceeding the system maximums described in the Assumptions section above.
+		matmult and 2matmult - pages are moved to the swap file and back into memory without any errors, and does not allow for race conditions so 2 different matmult operations will not ever exchange or modify the other’s data. Therefore each will independently arrive at the result 7220.
+
+	See the above Testing section for testing RPCs.
 
 
 VIII. Miscellaneous:
-	When the passport office has the max number of people (50 customers, 10 senators, 5 clerks) it takes a bit of time to complete, it may look like an infinite loop, but give it a minute or two and it will end most of the time. Sometimes test case 8 ends early and we're not sure why.
+		 
+

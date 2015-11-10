@@ -204,7 +204,7 @@ Initialize(int argc, char **argv)
     char* filename = new char[40];
     ss >> filename;
     fileSystem->Create(filename, 2048);
-    swapFile = fileSystem->Open("swapfile");
+    swapFile = fileSystem->Open(filename);
     if (swapFile == NULL) {
         DEBUG('a', "Unable to open swap file %s\n", "filename");
         Exit(-1);
