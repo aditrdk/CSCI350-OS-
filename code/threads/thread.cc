@@ -40,6 +40,11 @@ Thread::Thread(char* threadName)
     status = JUST_CREATED;
 #ifdef USER_PROGRAM
     space = NULL;
+#ifdef NETWORK
+    mailboxLock->Acquire();
+    mailboxId = numMailboxes;
+    numMailboxes++;
+    mailboxLock->Release();
 #endif
 }
 

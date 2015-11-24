@@ -31,7 +31,7 @@ CPP = $(GCCDIR)cpp
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt matmult sort testfiles yieldTest lockTest threadsTest execTest conditionTest forkTest printTest networklockTest networkreleaseTest multipassportofficeTest passportoffice networkTest networkconditionTest networksignalTest networkbroadcastTest networkmonitorTest networkgetmonitorTest 2matmult
+all: halt matmult sort testfiles yieldTest lockTest threadsTest execTest conditionTest forkTest printTest networklockTest networkreleaseTest multipassportofficeTest passportoffice networkTest networkconditionTest networksignalTest networkbroadcastTest networkmonitorTest networkgetmonitorTest 2matmult customer appclerk
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.s > strt.s
@@ -169,6 +169,18 @@ passportoffice: passportoffice.o start.o
 2matmult: 2matmult.o start.o
 	$(LD) $(LDFLAGS) start.o 2matmult.o -o 2matmult.coff
 	../bin/coff2noff 2matmult.coff 2matmult
+
+customer.o: customer.c passport.h
+	$(CC) $(CFLAGS) -c customer.c
+customer: customer.o start.o
+	$(LD) $(LDFLAGS) start.o customer.o -o customer.coff
+	../bin/coff2noff customer.coff customer
+
+appclerk.o: appclerk.c passport.h
+	$(CC) $(CFLAGS) -c appclerk.c
+appclerk: appclerk.o start.o
+	$(LD) $(LDFLAGS) start.o appclerk.o -o appclerk.coff
+	../bin/coff2noff appclerk.coff appclerk
 
 clean:
 	rm -f *.o *.coff

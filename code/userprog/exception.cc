@@ -726,6 +726,27 @@ void PrintfInt_Syscall(unsigned int vaddr, int len, int id){
 delete[] buf;
 }
 
+void SPrintfInt_Syscall(unsigned int dest, unsigned int vaddr, int len, int id){
+  char *buf;   // Kernel buffer for output
+
+ if ( !(buf = new char[len]) ) {
+    printf("%s","Error allocating kernel buffer for write!\n");
+    return;
+  } else {
+    if ( copyin(vaddr,len,buf) == -1 ) {
+     printf("%s","Bad pointer passed to to write: data not written\n");
+     delete[] buf;
+     return;
+   }
+  }
+  sprintf(buf, buf, id);
+  printf("%s\n", buf);
+  while ( copyout(dest, len -1, buf) == -1 ) {
+        //printf("%s","Bad pointer passed to Read: data not copied\n");
+  }
+  delete[] buf;
+}
+
 void PrintLargeInt_Syscall(unsigned int vaddr, int len, int id) {
   char *buf;   // Kernel buffer for output
 
@@ -1663,6 +1684,10 @@ void ExceptionHandler(ExceptionType which) {
        case SC_DestroyMonitorRPC:
        DEBUG('a', "DestroyMonitorRPC syscall.\n");
        DestroyMonitorRPC_Syscall(machine->ReadRegister(4));
+       break;
+       case SC_SPrintfInt:
+       DEBUG('a', "SPrintfInt syscall.\n");
+       SPrintfInt_Syscall(machine->ReadRegister(4), machine->ReadRegister(5), machine->ReadRegister(6), machine->ReadRegister(7));
        break;
      }
 

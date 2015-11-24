@@ -346,6 +346,14 @@ DestroyMonitorRPC:
 	j	$31
 	.end DestroyMonitorRPC
 
+	.globl SPrintfInt
+	.ent	SPrintfInt
+SPrintfInt:
+	addiu $2,$0,SC_SPrintfInt
+	syscall
+	j	$31
+	.end SPrintfInt
+
 /* dummy function to keep gcc happy */
         .globl  __main
         .ent    __main

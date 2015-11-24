@@ -66,6 +66,8 @@ Machine *machine;	// user program memory and registers
 #ifdef NETWORK
 PostOffice *postOffice;
 int machineId;
+Lock* mailboxLock;
+int numMailboxes;
 #endif
 
 
@@ -229,6 +231,8 @@ Initialize(int argc, char **argv)
 
 #ifdef NETWORK
     postOffice = new PostOffice(netname, rely, 10);
+    mailboxLock = new Lock("MailboxLock");
+    numMailboxes = 0;
 #endif
 }
 

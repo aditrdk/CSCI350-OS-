@@ -128,6 +128,11 @@ class Thread {
 
     AddrSpace *space;			// User code this thread is running.
 #endif
+
+#ifdef NETWORK
+    int mailboxId;
+#endif
+
 };
 
 // Magical machine-dependent routines, defined in switch.s

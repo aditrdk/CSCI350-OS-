@@ -56,6 +56,7 @@
 #define SC_SetMonitorRPC 35
 #define SC_GetMonitorRPC 36
 #define SC_DestroyMonitorRPC 37
+#define SC_SPrintfInt 38
 
 #define MAXFILENAME 256
 
@@ -171,13 +172,13 @@ void Release(int index);
 
 void ReleaseRPC(int index);
 
-int CreateMonitor(char *name, int size);
+int CreateMonitorRPC(char *name, int size);
 
-void SetMonitor(int index, int value);
+void SetMonitorRPC(int index, int value);
 
-int GetMonitor(int index);
+int GetMonitorRPC(int index);
 
-void DestroyMonitor(int index);
+void DestroyMonitorRPC(int index);
 /*Condition syscalls*/
 
 int CreateCondition(char *name, int size);
@@ -202,6 +203,8 @@ void BroadcastRPC(int index, int lock);
 
 /*Misc syscalls to help with userprograms*/
 void PrintfInt(char* string, int size, int id);
+
+void SPrintfInt(char* dest, char* string, int size, int id);
 
 void PrintLargeInt(char* string, int size, int id);
 
