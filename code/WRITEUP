@@ -127,14 +127,17 @@ To test Part 3:
 		First, to run the server: compile with gmake in the network directory, and then run ‘nachos -m 0 -server’
 	In another terminal run the programs like this:  “nachos -m 1 -x ../test/networklockTest”
 
-	To test Locks: run networklockTest with -m 1, and then run it again on another machine with -m 2
-	The second machine will be waiting to acquire the lock since machine 1 already owns it
-If we runt networkreleaseTest with -m 1 it will release the lock, allowing machine 2 to acquire it and continue
-To test Conditions:
-run networkconditionTest on multiple machines with -m 1, -m 2 , -m 3 .. -m n etc. who will all wait to be signalled and then run networkbroadcastTest with machine id -m n-1 all the other machines will continue running since they have been signalled. BroadcastRPC calls Signal therefore if it works so does signal, alternatively you can test with networksignalTest -m x
+	To test Locks: run networklockTest with -m 1, if you run it again it will end because machine 1 already has the lock.
+	Then run it again on another machine with -m 2, the second machine will be waiting to acquire the lock since machine 1 already owns it
+	
+	If we runt networkreleaseTest with -m 1 it will release the lock, allowing machine 2 to acquire it and continue
+	To test Conditions:
+	run networkconditionTest on multiple machines with -m 1, -m 2 , -m 3 .. -m n etc. who will all wait to be signalled and 
+	then run networkbroadcastTest with machine id -m n+1 all the other machines will continue running since they have been signalled. 
+	BroadcastRPC calls Signal therefore if it works so does signal, alternatively you can test with networksignalTest -m n+1
 
-To test monitors: 
-run networkmonitorTest with -m 1 and it will create and set a monitor variable to 420. then run networkmonitorgetTest and it will print out the value of the monitor variable correctly and delete it.
+	To test monitors: 
+	run networkmonitorTest with -m 1 and it will create and set a monitor variable to 420. then run networkgetmonitorTest and it will print out the value of the monitor variable correctly and delete it.
 
 	
 	+ Test Output
