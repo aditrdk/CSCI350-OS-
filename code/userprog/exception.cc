@@ -1035,14 +1035,14 @@ int CreateLockRPC_Syscall(unsigned int vaddr, int len) {
     strcat(message, buf);
     outPktHdr.to = 0;   
     outMailHdr.to = 0;
-    outMailHdr.from = 0;
+    outMailHdr.from = currentThread->mailboxId;
     outMailHdr.length = strlen(message) + 1;
     bool success = postOffice->Send(outPktHdr, outMailHdr, message);
     if(!success) {
       printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
       interrupt->Halt();
     }
-    postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+    postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
     fflush(stdout);
     std::stringstream ss;
     ss << message;
@@ -1067,14 +1067,14 @@ int AcquireRPC_Syscall(int index){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms;
   ms << message;
@@ -1099,14 +1099,14 @@ void ReleaseRPC_Syscall(int index){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms;
   ms << message;
@@ -1128,14 +1128,14 @@ void DestroyLockRPC_Syscall(int index){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms;
   ms << message;
@@ -1165,14 +1165,14 @@ int CreateConditionRPC_Syscall(unsigned int vaddr, int len){
   strcat(message, buf);
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ss;
   ss << message;
@@ -1201,14 +1201,14 @@ int WaitRPC_Syscall(int index, int lock){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms, rs;
   ms << message;
@@ -1224,7 +1224,7 @@ int WaitRPC_Syscall(int index, int lock){
   } 
   else if(!strcmp(call, "ReleasedLock")){
     printf("Released Lock%d\n", lock);
-     postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+     postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
      fflush(stdout);
      rs << message;
      ms >> call;
@@ -1253,14 +1253,14 @@ void SignalRPC_Syscall(int index, int lock){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms;
   ms << message;
@@ -1289,14 +1289,14 @@ void DestroyConditionRPC_Syscall(int index){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms;
   ms << message;
@@ -1322,14 +1322,14 @@ void BroadcastRPC_Syscall(int index, int lock){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms;
   ms << message;
@@ -1344,7 +1344,7 @@ void BroadcastRPC_Syscall(int index, int lock){
      printf("%s\n", message);
      return;
    }
-    postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+    postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
     fflush(stdout);
     std::stringstream cs;
     cs << message;
@@ -1372,14 +1372,14 @@ int CreateMonitorRPC_Syscall(unsigned int vaddr, int len){
     strcat(message, buf);
     outPktHdr.to = 0;   
     outMailHdr.to = 0;
-    outMailHdr.from = 0;
+    outMailHdr.from = currentThread->mailboxId;
     outMailHdr.length = strlen(message) + 1;
     bool success = postOffice->Send(outPktHdr, outMailHdr, message);
     if(!success) {
       printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
       interrupt->Halt();
     }
-    postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+    postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
     fflush(stdout);
     std::stringstream ss;
     ss << message;
@@ -1408,14 +1408,14 @@ void SetMonitorRPC_Syscall(int index, int value){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms;
   ms << message;
@@ -1439,14 +1439,14 @@ int GetMonitorRPC_Syscall(int index){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms;
   ms << message;
@@ -1475,14 +1475,14 @@ void DestroyMonitorRPC_Syscall(int index){
   MailHeader outMailHdr, inMailHdr;
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, message);
   if(!success) {
     printf("The postOffice Send failed. You must not have the other Nachos running. Terminating Nachos.\n");
     interrupt->Halt();
   }
-  postOffice->Receive(0, &inPktHdr, &inMailHdr, message);
+  postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
   fflush(stdout);
   std::stringstream ms;
   ms << message;
@@ -1510,7 +1510,7 @@ void SendMessage_Syscall(unsigned int vaddr, int len) {
     }
   outPktHdr.to = 0;   
   outMailHdr.to = 0;
-  outMailHdr.from = 0;
+  outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(buf) + 1;
   bool success = postOffice->Send(outPktHdr, outMailHdr, buf);
   if(!success) {
