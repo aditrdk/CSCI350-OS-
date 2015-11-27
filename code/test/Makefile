@@ -31,7 +31,7 @@ CPP = $(GCCDIR)cpp
 INCDIR =-I../userprog -I../threads
 CFLAGS = -G 0 -c $(INCDIR)
 
-all: halt matmult sort testfiles yieldTest lockTest threadsTest execTest conditionTest forkTest printTest networklockTest networkreleaseTest multipassportofficeTest passportoffice networkTest networkconditionTest networksignalTest networkbroadcastTest networkmonitorTest networkgetmonitorTest 2matmult customer appclerk
+all: halt matmult sort testfiles yieldTest lockTest threadsTest execTest conditionTest forkTest printTest networklockTest networkreleaseTest multipassportofficeTest passportoffice networkTest networkconditionTest networksignalTest networkbroadcastTest networkmonitorTest networkgetmonitorTest 2matmult customer appclerk createCustomers createPassportOffice
 
 start.o: start.s ../userprog/syscall.h
 	$(CPP) $(CPPFLAGS) start.s > strt.s
@@ -181,6 +181,19 @@ appclerk.o: appclerk.c passport.h
 appclerk: appclerk.o start.o
 	$(LD) $(LDFLAGS) start.o appclerk.o -o appclerk.coff
 	../bin/coff2noff appclerk.coff appclerk
+
+createCustomers.o: createCustomers.c passport.h
+	$(CC) $(CFLAGS) -c createCustomers.c
+createCustomers: createCustomers.o start.o
+	$(LD) $(LDFLAGS) start.o createCustomers.o -o createCustomers.coff
+	../bin/coff2noff createCustomers.coff createCustomers
+
+createPassportOffice.o: createPassportOffice.c passport.h
+	$(CC) $(CFLAGS) -c createPassportOffice.c
+createPassportOffice: createPassportOffice.o start.o
+	$(LD) $(LDFLAGS) start.o createPassportOffice.o -o createPassportOffice.coff
+	../bin/coff2noff createPassportOffice.coff createPassportOffice
+
 
 clean:
 	rm -f *.o *.coff

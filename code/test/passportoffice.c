@@ -780,6 +780,7 @@ void AppClerkThread() {
 	int i;
 	Clerk* ac;
 	int index;
+
 	Acquire(appLineLock);
 	index = appIndex;
 	ac = &appClerks[appIndex++];
@@ -826,7 +827,7 @@ void AppClerkThread() {
 		PrintfInt("ApplicationClerk %d has received a SSN %d from Customer %d\n", sizeof("ApplicationClerk %d has received a SSN %d from Customer %d\n"), 100000+ 100000* index + 1000 + 1000 * ac->dataIn + ac->dataIn);
 		waitTime = Rand() % 81 + 20;
 		for(i = 0; i < waitTime; i++) Yield(); /*Process for random amount of time(yields)*/
-			customersDatabase[ac->dataIn].appAccepted = true;
+		customersDatabase[ac->dataIn].appAccepted = true;
 		PrintfInt("ApplicationClerk %d has recorded a completed application for Customer %d\n", sizeof("ApplicationClerk %d has recorded a completed application for Customer %d\n"), 1000+1000* index + ac->dataIn);
 		Signal(ac->ClerkCV, ac->ClerkLock); /*Signal that application has been filed*/
 		Wait(ac->ClerkCV, ac->ClerkLock); /*Wait for customer to leave the counter*/
