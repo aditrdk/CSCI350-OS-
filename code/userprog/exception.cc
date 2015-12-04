@@ -1031,9 +1031,9 @@ int CreateLockRPC_Syscall(unsigned int vaddr, int len) {
     buf[len]='\0';
     PacketHeader outPktHdr, inPktHdr;
     MailHeader outMailHdr, inMailHdr;
-    strcpy(message, "CreateLock ");
+    strcpy(message, "CL ");
     strcat(message, buf);
-    outPktHdr.to = 0;   
+    outPktHdr.to = rand()%numServers;   
     outMailHdr.to = 0;
     outMailHdr.from = currentThread->mailboxId;
     outMailHdr.length = strlen(message) + 1;
@@ -1061,11 +1061,11 @@ int AcquireRPC_Syscall(int index){
   char message[MaxMailSize] ,lockNum[MaxMailSize];
   ss << index;
   ss >> lockNum;
-  strcpy(message, "AcquireLock ");
+  strcpy(message, "AL ");
   strcat(message, lockNum);
   PacketHeader outPktHdr, inPktHdr;
   MailHeader outMailHdr, inMailHdr;
-  outPktHdr.to = 0;   
+  outPktHdr.to = rand()%numServers;   
   outMailHdr.to = 0;
   outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
@@ -1093,11 +1093,11 @@ void ReleaseRPC_Syscall(int index){
   char message[MaxMailSize] ,lockNum[MaxMailSize];
   ss << index;
   ss >> lockNum;
-  strcpy(message, "ReleaseLock ");
+  strcpy(message, "RL ");
   strcat(message, lockNum);
   PacketHeader outPktHdr, inPktHdr;
   MailHeader outMailHdr, inMailHdr;
-  outPktHdr.to = 0;   
+  outPktHdr.to = rand()%numServers;   
   outMailHdr.to = 0;
   outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
@@ -1122,7 +1122,7 @@ void DestroyLockRPC_Syscall(int index){
   char message[MaxMailSize] ,lockNum[MaxMailSize];
   ss << index;
   ss >> lockNum;
-  strcpy(message, "DestroyLock ");
+  strcpy(message, "DL ");
   strcat(message, lockNum);
   PacketHeader outPktHdr, inPktHdr;
   MailHeader outMailHdr, inMailHdr;
@@ -1161,9 +1161,9 @@ int CreateConditionRPC_Syscall(unsigned int vaddr, int len){
   buf[len]='\0';
   PacketHeader outPktHdr, inPktHdr;
   MailHeader outMailHdr, inMailHdr;
-  strcpy(message, "CreateCondition ");
+  strcpy(message, "CC ");
   strcat(message, buf);
-  outPktHdr.to = 0;   
+  outPktHdr.to = rand()%numServers;   
   outMailHdr.to = 0;
   outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
@@ -1193,13 +1193,13 @@ int WaitRPC_Syscall(int index, int lock){
   ss >> conditionNum;
   bs << lock;
   bs >> lockNum;
-  strcpy(message, "WaitCondition ");
+  strcpy(message, "WC ");
   strcat(message, conditionNum);
   strcat(message, " ");
   strcat(message, lockNum);
   PacketHeader outPktHdr, inPktHdr;
   MailHeader outMailHdr, inMailHdr;
-  outPktHdr.to = 0;   
+  outPktHdr.to = rand()%numServers;   
   outMailHdr.to = 0;
   outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
@@ -1222,17 +1222,6 @@ int WaitRPC_Syscall(int index, int lock){
     printf("%s\n", message);
     return -1;
   } 
-  else if(!strcmp(call, "ReleasedLock")){
-    printf("Released Lock%d\n", lock);
-     postOffice->Receive(currentThread->mailboxId, &inPktHdr, &inMailHdr, message);
-     fflush(stdout);
-     rs << message;
-     ms >> call;
-     if(!strcmp(message, "InvalidLock")){
-      printf("%s\n", message);
-      return -1;
-     } 
-  }
   ms >> index;
   AcquireRPC_Syscall(lock);
   return index;
@@ -1245,13 +1234,13 @@ void SignalRPC_Syscall(int index, int lock){
   ss >> conditionNum;
   bs << lock;
   bs >> lockNum;
-  strcpy(message, "SignalCondition ");
+  strcpy(message, "SC ");
   strcat(message, conditionNum);
   strcat(message, " ");
   strcat(message, lockNum);
   PacketHeader outPktHdr, inPktHdr;
   MailHeader outMailHdr, inMailHdr;
-  outPktHdr.to = 0;   
+  outPktHdr.to = rand()%numServers;   
   outMailHdr.to = 0;
   outMailHdr.from = currentThread->mailboxId;
   outMailHdr.length = strlen(message) + 1;
@@ -1283,7 +1272,7 @@ void DestroyConditionRPC_Syscall(int index){
   char message[MaxMailSize] ,lockNum[MaxMailSize];
   ss << index;
   ss >> lockNum;
-  strcpy(message, "DestroyCondition ");
+  strcpy(message, "DC ");
   strcat(message, lockNum);
   PacketHeader outPktHdr, inPktHdr;
   MailHeader outMailHdr, inMailHdr;
@@ -1314,7 +1303,7 @@ void BroadcastRPC_Syscall(int index, int lock){
   ss >> conditionNum;
   bs << lock;
   bs >> lockNum;
-  strcpy(message, "BroadcastCondition ");
+  strcpy(message, "BC ");
   strcat(message, conditionNum);
   strcat(message, " ");
   strcat(message, lockNum);
@@ -1368,7 +1357,7 @@ int CreateMonitorRPC_Syscall(unsigned int vaddr, int len){
     buf[len]='\0';
     PacketHeader outPktHdr, inPktHdr;
     MailHeader outMailHdr, inMailHdr;
-    strcpy(message, "CreateMonitor ");
+    strcpy(message, "CM ");
     strcat(message, buf);
     outPktHdr.to = 0;   
     outMailHdr.to = 0;
@@ -1400,7 +1389,7 @@ void SetMonitorRPC_Syscall(int index, int value){
   ss >> monitorNum;
   bs << value;
   bs >> mValue;
-  strcpy(message, "SetMonitor ");
+  strcpy(message, "SM ");
   strcat(message, monitorNum);
   strcat(message, " ");
   strcat(message, mValue);
@@ -1433,7 +1422,7 @@ int GetMonitorRPC_Syscall(int index){
   char message[MaxMailSize], monitorNum[MaxMailSize];
   ss << index; 
   ss >> monitorNum;
-  strcpy(message, "GetMonitor ");
+  strcpy(message, "GM ");
   strcat(message, monitorNum); 
   PacketHeader outPktHdr, inPktHdr;
   MailHeader outMailHdr, inMailHdr;
@@ -1469,7 +1458,7 @@ void DestroyMonitorRPC_Syscall(int index){
   char message[MaxMailSize], monitorNum[MaxMailSize];
   ss << index; 
   ss >> monitorNum;
-  strcpy(message, "DestroyMonitor ");
+  strcpy(message, "DM ");
   strcat(message, monitorNum); 
   PacketHeader outPktHdr, inPktHdr;
   MailHeader outMailHdr, inMailHdr;

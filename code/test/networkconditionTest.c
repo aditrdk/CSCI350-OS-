@@ -8,7 +8,6 @@ int main(){
 	PrintfInt("Condition Number %d\n", sizeof("Condition Number %d\n"), conditionNum);
 	AcquireRPC(lockNum);
 	WaitRPC(conditionNum, lockNum);
-	DestroyConditionRPC(conditionNum);
 	PrintfInt("Got signalled from condition %d\n", sizeof("Got signalled from condition %d\n"), conditionNum);
 	ReleaseRPC(lockNum);
 }

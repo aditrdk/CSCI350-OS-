@@ -68,6 +68,7 @@ PostOffice *postOffice;
 int machineId;
 Lock* mailboxLock;
 int numMailboxes;
+int numServers;
 #endif
 
 
@@ -162,6 +163,11 @@ Initialize(int argc, char **argv)
             machineId = netname;
     	    argCount = 2;
     	}
+        else if (!strcmp(*argv, "-servers")) {
+            ASSERT(argc > 1);
+            numServers = atoi(*(argv + 1));
+            argCount = 2;
+        }
 #endif
     }
 

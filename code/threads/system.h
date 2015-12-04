@@ -103,6 +103,7 @@ extern PostOffice* postOffice;
 extern int machineId;
 extern Lock* mailboxLock;
 extern int numMailboxes;
+extern int numServers;
 #endif
 
 #endif // SYSTEM_H
